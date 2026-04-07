@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Wifi, MessageSquare, Zap, SlidersHorizontal, ShieldCheck,
   Save, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff,
-  RotateCcw, Loader2, Settings2, Info,
+  RotateCcw, Loader2, Settings2, Info, QrCode, RefreshCw, Unlink,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -98,6 +98,13 @@ export default function Settings() {
   const [saving,     setSaving]     = useState(false)
   const [savedKey,   setSavedKey]   = useState(null)
 
+  // QR code / WhatsApp connection
+  const [qrData,       setQrData]       = useState(null)   // base64 string
+  const [qrLoading,    setQrLoading]    = useState(false)
+  const [qrError,      setQrError]      = useState('')
+  const [waState,      setWaState]      = useState(null)   // 'open' | 'connecting' | 'close'
+  const pollRef = useRef(null)
+
   // ── Load ────────────────────────────────────────────────────────────────────
   const loadConfig = useCallback(async () => {
     setLoadingConfig(true)
@@ -180,6 +187,85 @@ export default function Settings() {
       setTesting(false)
     }
   }
+
+  // ── WhatsApp QR / Connection ─────────────────────────────────────────────────
+  const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+
+  const fetchWaState = async () => {
+    const { base_url, instance, api_key } = connection
+    if (!base_url || !instance || !api_key) return null
+    try {
+      const res  = await fetch(`${base_url.replace(/\/$/, '')}/instance/connectionState/${instance}`, { headers: { apikey: api_key } })
+      const json = await res.json().catch(() => ({}))
+      return json?.instance?.state || json?.state || null
+    } catch { return null }
+  }
+
+  const connectWhatsApp = async () => {
+    const { base_url, instance, api_key } = connection
+    if (!base_url || !instance || !api_key) {
+      setQrError('Salve as credenciais antes de conectar.')
+      return
+    }
+    setQrLoading(true)
+    setQrData(null)
+    setQrError('')
+    setWaState(null)
+    stopPoll()
+    try {
+      const res  = await fetch(`${base_url.replace(/\/$/, '')}/instance/connect/${instance}`, { headers: { apikey: api_key } })
+      const json = await res.json().catch(() => ({}))
+      if (json?.base64) {
+        setQrData(json.base64)
+        // Poll connection state every 3s — stop when open or after 2 min
+        let ticks = 0
+        pollRef.current = setInterval(async () => {
+          ticks++
+          const state = await fetchWaState()
+          setWaState(state)
+          if (state === 'open') {
+            stopPoll()
+            setQrData(null)
+            setTestResult('ok')
+            setTestMsg('✓ WhatsApp conectado e ativo!')
+          }
+          if (ticks > 40) stopPoll()   // timeout 2 min
+        }, 3000)
+      } else if (json?.instance?.state === 'open') {
+        setWaState('open')
+        setTestResult('ok')
+        setTestMsg('✓ WhatsApp já está conectado!')
+      } else {
+        setQrError(json?.message || 'Não foi possível gerar o QR code.')
+      }
+    } catch (err) {
+      setQrError('Erro ao conectar: ' + err.message)
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
+  const disconnectWhatsApp = async () => {
+    const { base_url, instance, api_key } = connection
+    if (!base_url || !instance || !api_key) return
+    stopPoll()
+    try {
+      await fetch(`${base_url.replace(/\/$/, '')}/instance/logout/${instance}`, { method: 'DELETE', headers: { apikey: api_key } })
+      setWaState('close')
+      setQrData(null)
+      setTestResult('warn')
+      setTestMsg('WhatsApp desconectado.')
+    } catch (err) {
+      setQrError('Erro ao desconectar: ' + err.message)
+    }
+  }
+
+  // Carregar estado inicial ao abrir a aba
+  useEffect(() => {
+    if (tab !== 'conexao') return
+    fetchWaState().then(s => { if (s) setWaState(s) })
+    return () => stopPoll()
+  }, [tab, connection.base_url, connection.instance, connection.api_key])
 
   // ── Guards ───────────────────────────────────────────────────────────────────
   if (!isLiderGeral) {
@@ -308,7 +394,7 @@ export default function Settings() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
                 <Button size="sm" variant="secondary" onClick={testConnection} loading={testing}>
                   <Wifi size={13} /> Testar conexão
                 </Button>
@@ -316,7 +402,51 @@ export default function Settings() {
                   <Save size={13} />
                   {savedKey === 'whatsapp_connection' ? '✓ Salvo!' : 'Salvar'}
                 </Button>
+                {waState !== 'open' ? (
+                  <Button size="sm" variant="secondary" onClick={connectWhatsApp} loading={qrLoading}>
+                    <QrCode size={13} /> Conectar WhatsApp
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={disconnectWhatsApp}>
+                    <Unlink size={13} /> Desconectar
+                  </Button>
+                )}
               </div>
+
+              {/* QR Code panel */}
+              {(qrData || qrError || waState === 'open') && (
+                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col items-center gap-3">
+                  {waState === 'open' && !qrData && (
+                    <div className="flex items-center gap-2 text-success-600 dark:text-success-400 text-sm font-medium">
+                      <CheckCircle2 size={18} /> WhatsApp conectado!
+                    </div>
+                  )}
+                  {qrData && (
+                    <>
+                      <p className="text-xs text-[var(--color-text-2)] text-center">
+                        Abra o WhatsApp no celular → Dispositivos conectados → Conectar dispositivo
+                      </p>
+                      <img
+                        src={qrData}
+                        alt="QR Code WhatsApp"
+                        className="w-48 h-48 rounded-lg border border-[var(--color-border)]"
+                      />
+                      <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-3)]">
+                        <Loader2 size={12} className="animate-spin" />
+                        Aguardando leitura do QR code...
+                      </div>
+                      <Button size="xs" variant="secondary" onClick={connectWhatsApp} loading={qrLoading}>
+                        <RefreshCw size={12} /> Gerar novo QR
+                      </Button>
+                    </>
+                  )}
+                  {qrError && (
+                    <div className="flex items-center gap-2 text-xs text-danger-600 dark:text-danger-400">
+                      <XCircle size={13} /> {qrError}
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
           </CardSection>
