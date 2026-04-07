@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Wifi, MessageSquare, Zap, SlidersHorizontal, ShieldCheck,
-  Save, CheckCircle2, XCircle, Eye, EyeOff,
+  Save, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff,
   RotateCcw, Loader2, Settings2, Info,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
@@ -93,7 +93,7 @@ export default function Settings() {
   // ui
   const [showKey,    setShowKey]    = useState(false)
   const [testing,    setTesting]    = useState(false)
-  const [testResult, setTestResult] = useState(null)   // 'ok' | 'error'
+  const [testResult, setTestResult] = useState(null)   // 'ok' | 'warn' | 'error'
   const [testMsg,    setTestMsg]    = useState('')
   const [saving,     setSaving]     = useState(false)
   const [savedKey,   setSavedKey]   = useState(null)
@@ -159,9 +159,16 @@ export default function Settings() {
       const res  = await fetch(url, { headers: { apikey: api_key } })
       const json = await res.json().catch(() => ({}))
 
-      if (res.ok && (json?.instance?.state === 'open' || json?.state === 'open')) {
-        setTestResult('ok')
-        setTestMsg(`✓ Conectado! Instância "${instance}" está online.`)
+      const state = json?.instance?.state || json?.state
+      if (res.ok && state) {
+        const stateLabels = {
+          open:       '✓ WhatsApp conectado e ativo!',
+          connecting: '⚠ API alcançada. WhatsApp ainda não conectado — escaneie o QR code.',
+          close:      '⚠ API alcançada. WhatsApp desconectado — reconecte pelo painel.',
+        }
+        const isOpen = state === 'open'
+        setTestResult(isOpen ? 'ok' : 'warn')
+        setTestMsg(stateLabels[state] || `API respondeu: estado "${state}"`)
       } else {
         setTestResult('error')
         setTestMsg(json?.message || json?.error || `Resposta inesperada (HTTP ${res.status})`)
@@ -287,10 +294,14 @@ export default function Settings() {
                   'flex items-start gap-2 rounded-lg p-3 text-xs',
                   testResult === 'ok'
                     ? 'bg-success-50 dark:bg-success-500/10 text-success-700 dark:text-success-400 border border-success-200 dark:border-success-700'
+                    : testResult === 'warn'
+                    ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
                     : 'bg-danger-50 dark:bg-danger-500/10 text-danger-700 dark:text-danger-400 border border-danger-200 dark:border-danger-700'
                 )}>
                   {testResult === 'ok'
                     ? <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+                    : testResult === 'warn'
+                    ? <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
                     : <XCircle      size={14} className="flex-shrink-0 mt-0.5" />
                   }
                   <span>{testMsg}</span>
