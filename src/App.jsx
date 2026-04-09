@@ -1,6 +1,36 @@
+import { Component, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Clock } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { Layout } from './components/layout/Layout.jsx'
+import { Button } from './components/ui/Button.jsx'
+
+// ── Error Boundary ────────────────────────────────────────────────────────────
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error, info) { console.error('[ErrorBoundary]', error, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)] p-6">
+          <div className="max-w-sm w-full text-center space-y-3">
+            <p className="text-sm font-semibold text-[var(--color-text-1)]">Algo deu errado</p>
+            <p className="text-xs text-[var(--color-text-3)]">{this.state.error?.message}</p>
+            <button
+              onClick={() => { this.setState({ error: null }); window.location.href = '/dashboard' }}
+              className="text-xs text-primary-600 underline"
+            >
+              Voltar ao início
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // Pages
 import Login      from './pages/Login.jsx'
@@ -20,10 +50,58 @@ import Settings     from './pages/Settings.jsx'
 
 // ── Guards ───────────────────────────────────────────────────────────────────
 
+function PendingApproval() {
+  const { signOut, profile } = useAuth()
+  return (
+    <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)] p-6">
+      <div className="max-w-sm w-full text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto">
+          <Clock size={28} className="text-amber-600 dark:text-amber-400" />
+        </div>
+        <h2 className="text-lg font-semibold text-[var(--color-text-1)]">Cadastro em análise</h2>
+        <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
+          Olá{profile?.nome ? `, ${profile.nome.split(' ')[0]}` : ''}! Seu cadastro foi recebido e está aguardando aprovação do Líder Geral.
+          Você receberá uma notificação no WhatsApp quando for aprovado.
+        </p>
+        <p className="text-xs text-[var(--color-text-3)]">
+          Se já foi aprovado e ainda está vendo esta tela, saia e entre novamente.
+        </p>
+        <Button variant="secondary" onClick={signOut} className="mx-auto">Sair</Button>
+      </div>
+    </div>
+  )
+}
+
+function ProfileError({ onRetry, onSignOut }) {
+  return (
+    <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)] p-6">
+      <div className="max-w-sm w-full text-center space-y-4">
+        <p className="text-sm font-semibold text-[var(--color-text-1)]">Erro ao carregar perfil</p>
+        <p className="text-xs text-[var(--color-text-3)] leading-relaxed">
+          Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.
+        </p>
+        <div className="flex gap-3 justify-center">
+          <Button onClick={onRetry}>Tentar novamente</Button>
+          <Button variant="secondary" onClick={onSignOut}>Sair</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RequireAuth({ children }) {
-  const { session, loading } = useAuth()
+  const { session, profile, loading, profileLoading, profileAttempted, signOut, refreshProfile } = useAuth()
+
+  // Wait for initial auth check
   if (loading) return <AppLoader />
+  // Not authenticated → login
   if (!session) return <Navigate to="/login" replace />
+  // Profile fetch still in progress or not yet attempted → wait
+  if (profileLoading || !profileAttempted) return <AppLoader />
+  // Profile failed to load — show recoverable error (network issue, cold start, etc.)
+  if (!profile) return <ProfileError onRetry={refreshProfile} onSignOut={signOut} />
+  // Account exists but not yet approved → block
+  if (profile.ativo === false) return <PendingApproval />
   return children
 }
 
@@ -41,6 +119,14 @@ function DashboardRouter() {
   return <MembroDashboard />
 }
 
+/** Redirect if the user's role is not in the allowed list */
+function RequireRole({ allowed, children }) {
+  const { profile, loading } = useAuth()
+  if (loading) return <AppLoader />
+  if (profile && !allowed.includes(profile.role)) return <Navigate to="/dashboard" replace />
+  return children
+}
+
 function AppLoader() {
   return (
     <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)]">
@@ -56,6 +142,7 @@ function AppLoader() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -67,7 +154,7 @@ export default function App() {
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route path="/dashboard"    element={<DashboardRouter />} />
             <Route path="/members"      element={<Members />} />
-            <Route path="/briefing"     element={<Briefing />} />
+            <Route path="/briefing"     element={<RequireRole allowed={['lider_geral','lider_funcao']}><Briefing /></RequireRole>} />
             <Route path="/availability" element={<Availability />} />
             <Route path="/schedule"     element={<Schedule />} />
             <Route path="/visitors"     element={<Visitors />} />
@@ -83,5 +170,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }

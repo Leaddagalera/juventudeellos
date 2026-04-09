@@ -7,6 +7,7 @@
  */
 
 import { loadAppConfig, invalidateAppConfig } from './config.js'
+import { sendWhatsApp as _send, invalidateConfigCache } from '../services/whatsapp.js'
 
 // ── Defaults (shown/used when no custom config exists) ─────────────────────
 
@@ -106,6 +107,7 @@ export const DEFAULT_CONDITIONS = {
 
 export function invalidateWhatsAppConfig() {
   invalidateAppConfig()
+  invalidateConfigCache()
 }
 
 // ── Template interpolation ─────────────────────────────────────────────────
@@ -116,39 +118,10 @@ function interpolate(template, vars) {
   )
 }
 
-// ── Low-level send ─────────────────────────────────────────────────────────
+// ── Low-level send — delegates to src/services/whatsapp.js ────────────────
 
 async function sendMessage(phone, text) {
-  const cfg = await loadAppConfig()
-  const conn = cfg.whatsapp_connection || {}
-
-  const baseUrl  = conn.base_url || import.meta.env.VITE_EVOLUTION_BASE_URL || ''
-  const instance = conn.instance || import.meta.env.VITE_EVOLUTION_INSTANCE || ''
-  const apiKey   = conn.api_key  || import.meta.env.VITE_EVOLUTION_API_KEY  || ''
-  const enabled  = conn.enabled  !== undefined ? conn.enabled : !!(import.meta.env.VITE_EVOLUTION_BASE_URL)
-
-  if (!enabled || !baseUrl || !instance || !apiKey) {
-    console.log('[WhatsApp DEMO] →', phone, ':', text)
-    return { demo: true }
-  }
-
-  const normalized = phone.replace(/\D/g, '')
-  const withCC     = normalized.startsWith('55') ? normalized : `55${normalized}`
-  const number     = `${withCC}@s.whatsapp.net`
-
-  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/message/sendText/${instance}`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', apikey: apiKey },
-    body:    JSON.stringify({ number, text }),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    console.error('[WhatsApp] Error sending to', number, err)
-    throw new Error(`Evolution API error: ${err}`)
-  }
-
-  return res.json()
+  return _send({ numero: phone, mensagem: text })
 }
 
 // ── Template-based send (checks automation toggle + uses custom template) ──

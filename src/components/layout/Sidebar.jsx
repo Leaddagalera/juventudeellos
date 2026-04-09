@@ -2,57 +2,32 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   CheckSquare, UserPlus, BarChart2, Image, Bell,
-  LogOut, Moon, Sun, Music, ChevronRight, Settings2
+  LogOut, Moon, Sun, Music, ChevronRight, Settings2,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { usePermissions } from '../../lib/permissions.js'
 import { cn } from '../../lib/utils.js'
 import { Avatar } from '../ui/Card.jsx'
 
-const liderGeralLinks = [
-  { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/members',      icon: Users,           label: 'Membros' },
-  { to: '/schedule',     icon: Calendar,        label: 'Escalas' },
-  { to: '/briefing',     icon: ClipboardList,   label: 'Briefings' },
-  { to: '/availability', icon: CheckSquare,     label: 'Disponibilidade' },
-  { to: '/visitors',     icon: UserPlus,        label: 'Visitantes' },
-  { to: '/reports',      icon: BarChart2,       label: 'Relatórios' },
-  { to: '/media',        icon: Image,           label: 'Mídia' },
-  { to: '/announcements',icon: Bell,            label: 'Comunicados' },
-  { to: '/settings',     icon: Settings2,       label: 'Configurações', divider: true },
-]
-
-const liderFuncaoLinks = [
-  { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/schedule',     icon: Calendar,        label: 'Escalas' },
-  { to: '/briefing',     icon: ClipboardList,   label: 'Briefings' },
-  { to: '/availability', icon: CheckSquare,     label: 'Disponibilidade' },
-  { to: '/announcements',icon: Bell,            label: 'Comunicados' },
-]
-
-const membroLinks = [
-  { to: '/dashboard',    icon: LayoutDashboard, label: 'Início' },
-  { to: '/schedule',     icon: Calendar,        label: 'Minha Escala' },
-  { to: '/briefing',     icon: ClipboardList,   label: 'Briefing' },
-  { to: '/availability', icon: CheckSquare,     label: 'Disponibilidade' },
-  { to: '/visitors',     icon: UserPlus,        label: 'Visitantes' },
-]
-
-const observadorLinks = [
-  { to: '/dashboard',    icon: LayoutDashboard, label: 'Início' },
-  { to: '/schedule',     icon: Calendar,        label: 'Escala Geral' },
-  { to: '/briefing',     icon: ClipboardList,   label: 'Briefings' },
+// All possible nav items, tagged by the screen ID in the `perfis` table
+const ALL_LINKS = [
+  { screen: 'dashboard',       to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
+  { screen: 'membros',         to: '/members',       icon: Users,           label: 'Membros' },
+  { screen: 'escalas',         to: '/schedule',      icon: Calendar,        label: 'Escalas' },
+  { screen: 'briefings',       to: '/briefing',      icon: ClipboardList,   label: 'Briefings' },
+  { screen: 'disponibilidade', to: '/availability',  icon: CheckSquare,     label: 'Disponibilidade' },
+  { screen: 'visitantes',      to: '/visitors',      icon: UserPlus,        label: 'Visitantes' },
+  { screen: 'relatorios',      to: '/reports',       icon: BarChart2,       label: 'Relatórios' },
+  { screen: 'midia_login',     to: '/media',         icon: Image,           label: 'Mídia' },
+  { screen: 'comunicados',     to: '/announcements', icon: Bell,            label: 'Comunicados' },
+  { screen: 'configuracoes',   to: '/settings',      icon: Settings2,       label: 'Configurações', divider: true },
 ]
 
 export function Sidebar({ onClose }) {
-  const { profile, signOut, darkMode, setDarkMode, isLiderGeral, isLiderFuncao, isMembroServe } = useAuth()
+  const { profile, signOut, darkMode, setDarkMode } = useAuth()
+  const { hasScreen } = usePermissions()
 
-  const links = isLiderGeral
-    ? liderGeralLinks
-    : isLiderFuncao
-    ? liderFuncaoLinks
-    : isMembroServe
-    ? membroLinks
-    : observadorLinks
+  const links = ALL_LINKS.filter(l => hasScreen(l.screen))
 
   return (
     <aside className="flex flex-col h-full w-60 bg-[var(--color-surface)] border-r border-[var(--color-border)]">

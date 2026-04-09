@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Filter, ArrowLeftRight, CheckCircle } from 'lucide-react'
+import { Calendar, ArrowLeftRight, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, CardSection, EmptyState, Skeleton, Avatar } from '../components/ui/Card.jsx'
 import { Badge, SubdepBadge } from '../components/ui/Badge.jsx'
 import { Button } from '../components/ui/Button.jsx'
-import { Select } from '../components/ui/Input.jsx'
+import { Select, Textarea } from '../components/ui/Input.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
-import { Textarea } from '../components/ui/Input.jsx'
 import { formatDomingo, subdepLabel } from '../lib/utils.js'
 
 const SUBDEPS_ALL = ['louvor','regencia','ebd','recepcao','midia']
@@ -33,19 +32,26 @@ function ConfirmButton({ status, onConfirm, onRecuse }) {
 
 export default function Schedule() {
   const { profile, isLiderGeral, isLiderFuncao, isMembroServe } = useAuth()
+  const canApproveTrocas = isLiderGeral || isLiderFuncao
+
   const [ciclo,        setCiclo]        = useState(null)
   const [escalas,      setEscalas]      = useState([])
   const [loading,      setLoading]      = useState(true)
-  // lider_funcao começa filtrado pelo seu subdep; lider_geral começa sem filtro
   const [subdepFilter, setSubdepFilter] = useState(
     isLiderFuncao && !isLiderGeral ? (profile?.subdep_lider || '') : ''
   )
+  // Solicit troca (membro)
   const [trocaModal,   setTrocaModal]   = useState(false)
   const [trocaEscala,  setTrocaEscala]  = useState(null)
   const [trocaMotivo,  setTrocaMotivo]  = useState('')
   const [trocaSending, setTrocaSending] = useState(false)
+  // Approve trocas (líder)
+  const [trocas,          setTrocas]          = useState([])
+  const [trocasLoading,   setTrocasLoading]   = useState(false)
+  const [approvingTroca,  setApprovingTroca]  = useState(null)
 
   useEffect(() => { loadEscalas() }, [])
+  useEffect(() => { if (canApproveTrocas && ciclo) loadTrocas() }, [ciclo?.id])
 
   async function loadEscalas() {
     setLoading(true)
@@ -89,6 +95,44 @@ export default function Schedule() {
   async function updateStatus(escalaId, status) {
     await supabase.from('escalas').update({ status_confirmacao: status }).eq('id', escalaId)
     setEscalas(prev => prev.map(e => e.id === escalaId ? { ...e, status_confirmacao: status } : e))
+  }
+
+  async function loadTrocas() {
+    if (!ciclo) return
+    setTrocasLoading(true)
+    try {
+      let q = supabase
+        .from('trocas')
+        .select('*, escalas(domingo, subdepartamento, user_id, users(nome)), solicitante:users!trocas_solicitante_id_fkey(nome)')
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: false })
+
+      // lider_funcao only sees trocas for their subdep
+      if (!isLiderGeral && isLiderFuncao && profile?.subdep_lider) {
+        q = q.eq('escalas.subdepartamento', profile.subdep_lider)
+      }
+
+      const { data } = await q
+      setTrocas((data || []).filter(t => t.escalas))   // drop orphaned rows
+    } finally {
+      setTrocasLoading(false)
+    }
+  }
+
+  async function decideTroca(troca, decision) {
+    setApprovingTroca(troca.id)
+    try {
+      const { error } = await supabase
+        .from('trocas')
+        .update({ status: decision, aprovado_por: profile.id })
+        .eq('id', troca.id)
+      if (error) throw error
+      setTrocas(prev => prev.filter(t => t.id !== troca.id))
+    } catch (err) {
+      alert('Erro: ' + err.message)
+    } finally {
+      setApprovingTroca(null)
+    }
   }
 
   async function submitTroca() {
@@ -204,6 +248,75 @@ export default function Schedule() {
             ))}
           </Card>
         ))
+      )}
+
+      {/* ── Trocas pendentes (líderes) ─────────────────────────────────────── */}
+      {canApproveTrocas && (
+        <Card>
+          <CardSection
+            title={
+              <span className="flex items-center gap-2">
+                Trocas pendentes
+                {trocas.length > 0 && (
+                  <span className="text-2xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
+                    {trocas.length}
+                  </span>
+                )}
+              </span>
+            }
+          >
+            {trocasLoading ? (
+              <Skeleton className="h-16 rounded" />
+            ) : trocas.length === 0 ? (
+              <EmptyState icon={CheckCircle} title="Nenhuma troca pendente" />
+            ) : (
+              <div className="space-y-2">
+                {trocas.map(t => {
+                  const esc = t.escalas
+                  const isApproving = approvingTroca === t.id
+                  return (
+                    <div key={t.id} className="rounded-xl border border-[var(--color-border)] p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-medium text-[var(--color-text-1)]">
+                              {t.solicitante?.nome || 'Membro'}
+                            </p>
+                            <span className="text-[var(--color-text-3)] text-xs">→</span>
+                            <SubdepBadge subdep={esc?.subdepartamento} />
+                            <span className="text-xs text-[var(--color-text-3)]">
+                              {esc?.domingo ? formatDomingo(esc.domingo) : ''}
+                            </span>
+                          </div>
+                          {t.motivo && (
+                            <p className="text-xs text-[var(--color-text-3)] mt-1 italic">"{t.motivo}"</p>
+                          )}
+                        </div>
+                        <Clock size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm" className="flex-1"
+                          onClick={() => decideTroca(t, 'aprovado')}
+                          loading={isApproving}
+                        >
+                          <CheckCircle size={12} /> Aprovar
+                        </Button>
+                        <Button
+                          size="sm" variant="secondary" className="flex-1"
+                          onClick={() => decideTroca(t, 'recusado')}
+                          disabled={isApproving}
+                        >
+                          <XCircle size={12} /> Recusar
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardSection>
+        </Card>
       )}
 
       {/* Troca Modal */}

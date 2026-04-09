@@ -4,9 +4,11 @@ import { supabase } from '../lib/supabase.js'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [session,  setSession]  = useState(null)
-  const [profile,  setProfile]  = useState(null)
-  const [loading,  setLoading]  = useState(true)
+  const [session,          setSession]          = useState(null)
+  const [profile,          setProfile]          = useState(null)
+  const [loading,          setLoading]          = useState(true)
+  const [profileLoading,   setProfileLoading]   = useState(false)
+  const [profileAttempted, setProfileAttempted] = useState(false)
   const initializedRef = useRef(false)
 
   const [darkMode, setDarkMode] = useState(() => {
@@ -21,12 +23,15 @@ export function AuthProvider({ children }) {
   }, [darkMode])
 
   const fetchProfile = useCallback(async (userId) => {
+    setProfileLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
+      // 8s timeout — prevents hanging on Supabase cold starts (free tier can take 30s+)
+      const { data, error } = await Promise.race([
+        supabase.from('users').select('*').eq('id', userId).single(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('profile-timeout')), 8000)
+        ),
+      ])
       if (error) throw error
       setProfile(data)
       return data
@@ -34,6 +39,9 @@ export function AuthProvider({ children }) {
       console.warn('[Auth] Could not fetch profile:', err.message)
       setProfile(null)
       return null
+    } finally {
+      setProfileLoading(false)
+      setProfileAttempted(true)  // always fires — even on error/timeout
     }
   }, [])
 
@@ -42,8 +50,9 @@ export function AuthProvider({ children }) {
 
     async function init() {
       try {
+        // 15s timeout — generous enough for slow networks and Supabase cold starts
         const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('auth-timeout')), 6000)
+          setTimeout(() => reject(new Error('auth-timeout')), 15000)
         )
         const { data: { session } } = await Promise.race([
           supabase.auth.getSession(),
@@ -54,6 +63,7 @@ export function AuthProvider({ children }) {
         if (session?.user) await fetchProfile(session.user.id)
       } catch (err) {
         if (err.message !== 'auth-timeout') console.warn('[Auth] init failed:', err)
+        // On timeout: leave session/profile as null → user will see login
       } finally {
         if (mounted) {
           setLoading(false)
@@ -64,18 +74,41 @@ export function AuthProvider({ children }) {
 
     init()
 
-    // Only react to real auth events (sign in, sign out, token refresh)
-    // Skip INITIAL_SESSION — handled by init() above
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event, newSession) => {
         if (!mounted) return
         if (event === 'INITIAL_SESSION') return
 
-        setSession(session)
-        if (session?.user) {
-          await fetchProfile(session.user.id)
-        } else {
+        if (event === 'SIGNED_OUT') {
+          // Verify the sign-out is real before clearing state.
+          // Background token refresh failures can emit a spurious SIGNED_OUT.
+          try {
+            const { data } = await supabase.auth.getSession()
+            if (!mounted) return
+            if (data.session) {
+              // Still have a valid session — the SIGNED_OUT was spurious, ignore it
+              return
+            }
+          } catch { /* ignore — treat as real sign-out */ }
+          setSession(null)
           setProfile(null)
+          setProfileAttempted(false)
+          return
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          // Token silently refreshed — only update the session object, never re-fetch
+          // the profile (it hasn't changed) and never reset profileAttempted (would
+          // cause a loading flash while the profile re-fetches).
+          setSession(newSession)
+          return
+        }
+
+        // SIGNED_IN, USER_UPDATED, etc. — fetch fresh profile
+        setSession(newSession)
+        if (newSession?.user) {
+          setProfileAttempted(false)
+          await fetchProfile(newSession.user.id)
         }
       }
     )
@@ -89,6 +122,17 @@ export function AuthProvider({ children }) {
   const signIn = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+
+    // Block unapproved users at login — never let them establish a real session
+    if (data.user) {
+      const { data: userRow } = await supabase
+        .from('users').select('ativo').eq('id', data.user.id).single()
+      if (userRow?.ativo === false) {
+        await supabase.auth.signOut()
+        throw new Error('PENDING_APPROVAL')
+      }
+    }
+
     return data
   }
 
@@ -115,13 +159,27 @@ export function AuthProvider({ children }) {
         ativo:           false,
       })
     }
+
+    // KEY FIX: Destroy the auto-created session immediately.
+    // signUp() creates a Supabase session automatically. We don't want
+    // unapproved users to be logged in — sign them out right away.
+    await supabase.auth.signOut()
+
     return data
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const signOut = () => {
+    // 1. Remove Supabase's stored token from localStorage immediately so the
+    //    next page load doesn't pick it up, even if the network call is slow.
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      .forEach(k => localStorage.removeItem(k))
+    // 2. Fire-and-forget server-side invalidation (don't block navigation).
+    supabase.auth.signOut().catch(() => {})
+    // 3. Clear React state and navigate away immediately.
     setSession(null)
     setProfile(null)
+    setProfileAttempted(false)
     window.location.href = '/login'
   }
 
@@ -133,6 +191,8 @@ export function AuthProvider({ children }) {
     session,
     profile,
     loading,
+    profileLoading,
+    profileAttempted,
     darkMode,
     setDarkMode,
     signIn,

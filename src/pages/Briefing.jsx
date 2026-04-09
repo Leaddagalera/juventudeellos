@@ -8,6 +8,7 @@ import { Input, Textarea, ChipSelect } from '../components/ui/Input.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { subdepLabel } from '../lib/utils.js'
+import { useSysConfig } from '../lib/sysConfig.js'
 
 const INSTRUMENT_OPTS = [
   { value: 'violao',   label: 'Violão' },
@@ -189,6 +190,7 @@ function GridCell({ briefing, onClick, readOnly }) {
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function Briefing() {
   const { profile, isLiderGeral, isLiderFuncao } = useAuth()
+  const { config: sysConfig } = useSysConfig()
 
   // Calcular subdeps visíveis ANTES dos useStates para poder usar no initializer
   const mySubdeps = Array.isArray(profile?.subdepartamento)
@@ -314,7 +316,7 @@ export default function Briefing() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-text-1)]">Briefings</h2>
-          <p className="text-xs text-[var(--color-text-3)]">Ciclo atual · Dia {dia} de 45</p>
+          <p className="text-xs text-[var(--color-text-3)]">Ciclo atual · Dia {dia} de {sysConfig.cycle_duration}</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => loadBriefings(false)}>
           <RefreshCw size={13} />

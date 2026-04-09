@@ -101,7 +101,10 @@ function UploadZone({ onFile, disabled }) {
           Arraste um arquivo ou <span className="text-primary-600 dark:text-primary-400">clique aqui</span>
         </p>
         <p className="text-xs text-[var(--color-text-3)] mt-1">
-          Fotos (JPG, PNG, WebP, GIF) ou Vídeos (MP4, WebM) · Máx. {MAX_SIZE_MB} MB
+          Ideal: 1080×1920px · proporção 9:16 · Máx. {MAX_SIZE_MB} MB
+        </p>
+        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">
+          Imagens fora dessa proporção serão cortadas ao centro
         </p>
       </div>
       <input
@@ -229,6 +232,7 @@ export default function Media() {
   const [progress,   setProgress]   = useState(0)
   const [uploading,  setUploading]  = useState(false)
   const [uploadErr,  setUploadErr]  = useState('')
+  const [ratioWarn,  setRatioWarn]  = useState('')   // aspect-ratio warning
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const loadMedia = useCallback(async () => {
@@ -246,6 +250,7 @@ export default function Media() {
   // ── File select ─────────────────────────────────────────────────────────────
   function handleFile(f) {
     setUploadErr('')
+    setRatioWarn('')
     if (f.size > MAX_SIZE_MB * 1024 * 1024) {
       setUploadErr(`O arquivo excede ${MAX_SIZE_MB} MB.`)
       return
@@ -256,6 +261,24 @@ export default function Media() {
       return
     }
     setFile(f)
+    // Check aspect ratio for images
+    if (f.type.startsWith('image/')) {
+      const url = URL.createObjectURL(f)
+      const img = new Image()
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const ratio = img.naturalWidth / img.naturalHeight
+        const ideal = 9 / 16
+        if (Math.abs(ratio - ideal) > 0.05) {
+          setRatioWarn(
+            `Proporção detectada: ${img.naturalWidth}×${img.naturalHeight}px. ` +
+            `Para melhor resultado use 1080×1920px (9:16). ` +
+            `A imagem será cortada automaticamente nas laterais.`
+          )
+        }
+      }
+      img.src = url
+    }
   }
 
   function resetModal() {
@@ -264,6 +287,7 @@ export default function Media() {
     setProgress(0)
     setUploading(false)
     setUploadErr('')
+    setRatioWarn('')
     setModal(false)
   }
 
@@ -495,15 +519,24 @@ export default function Media() {
 
           {/* File picker / drop zone */}
           {!file ? (
-            <UploadZone onFile={handleFile} disabled={uploading} />
+            <div className="space-y-3">
+              <UploadZone onFile={handleFile} disabled={uploading} />
+              {/* Specs */}
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-2)] px-3 py-2.5 text-xs text-[var(--color-text-3)] space-y-1">
+                <p><span className="font-medium text-[var(--color-text-2)]">Fotos:</span> JPG, PNG, WebP, GIF &nbsp;·&nbsp; Tamanho ideal: <span className="font-medium text-[var(--color-text-2)]">1080×1920px</span> (9:16 — vertical) &nbsp;·&nbsp; Mín. 720×1280px &nbsp;·&nbsp; Máx. {MAX_SIZE_MB} MB</p>
+                <p><span className="font-medium text-[var(--color-text-2)]">Vídeos:</span> MP4, WebM &nbsp;·&nbsp; Proporção 9:16 (vertical) &nbsp;·&nbsp; Máx. {MAX_SIZE_MB} MB</p>
+                <p className="text-2xs">A imagem será exibida em tela cheia no mobile — imagens fora do 9:16 serão cortadas ao centro.</p>
+              </div>
+            </div>
           ) : (
-            <div className="rounded-xl border border-[var(--color-border)] overflow-hidden">
-              {/* Preview */}
-              <div className="w-full h-40 bg-black flex items-center justify-center overflow-hidden">
+            <div className="space-y-2">
+              {/* 9:16 crop preview */}
+              <div className="rounded-xl border border-[var(--color-border)] overflow-hidden bg-black"
+                style={{ aspectRatio: '9/16', maxHeight: 220, position: 'relative' }}>
                 {file.type.startsWith('video/') ? (
                   <video
                     src={URL.createObjectURL(file)}
-                    className="max-h-40 max-w-full object-contain"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                     muted
                     controls
                   />
@@ -511,12 +544,21 @@ export default function Media() {
                   <img
                     src={URL.createObjectURL(file)}
                     alt="preview"
-                    className="max-h-40 max-w-full object-contain"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                   />
                 )}
               </div>
+
+              {/* Ratio warning */}
+              {ratioWarn && (
+                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
+                  <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                  <span>{ratioWarn}</span>
+                </div>
+              )}
+
               {/* File info + change button */}
-              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-[var(--color-bg-2)]">
+              <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--color-bg-2)] border border-[var(--color-border)]">
                 <div className="flex items-center gap-2 min-w-0">
                   {file.type.startsWith('video/')
                     ? <FileVideo size={14} className="text-violet-500 flex-shrink-0" />
@@ -526,7 +568,7 @@ export default function Media() {
                   <span className="text-2xs text-[var(--color-text-3)] flex-shrink-0">{formatBytes(file.size)}</span>
                 </div>
                 <button
-                  onClick={() => setFile(null)}
+                  onClick={() => { setFile(null); setRatioWarn('') }}
                   className="text-xs text-[var(--color-text-3)] hover:text-danger-500 flex-shrink-0 transition-colors"
                 >
                   Trocar

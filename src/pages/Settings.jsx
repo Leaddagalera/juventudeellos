@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Wifi, MessageSquare, Zap, SlidersHorizontal, ShieldCheck,
   Save, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff,
-  RotateCcw, Loader2, Settings2, Info, QrCode, RefreshCw, Unlink,
+  RotateCcw, Loader2, Settings2, Info, QrCode, RefreshCw, Unlink, CalendarDays,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -15,8 +15,15 @@ import {
   DEFAULT_CONDITIONS,
   invalidateWhatsAppConfig,
 } from '../lib/whatsapp.js'
+import {
+  testConnection as apiTestConnection,
+  sendWhatsApp,
+  invalidateConfigCache,
+} from '../services/whatsapp.js'
 import { cn } from '../lib/utils.js'
 import ProfilesManager from '../components/settings/ProfilesManager.jsx'
+import EventsManager   from '../components/settings/EventsManager.jsx'
+import DevModeManager  from '../components/settings/DevModeManager.jsx'
 
 // ── Static metadata ───────────────────────────────────────────────────────────
 
@@ -26,6 +33,8 @@ const TABS = [
   { id: 'automacoes', label: 'Automações', icon: Zap },
   { id: 'condicoes',  label: 'Condições',  icon: SlidersHorizontal },
   { id: 'perfis',     label: 'Perfis',     icon: ShieldCheck },
+  { id: 'eventos',    label: 'Eventos',    icon: CalendarDays },
+  { id: 'modo_dev',   label: 'Dev',        icon: Settings2 },
 ]
 
 export const MSG_META = {
@@ -103,7 +112,14 @@ export default function Settings() {
   const [qrLoading,    setQrLoading]    = useState(false)
   const [qrError,      setQrError]      = useState('')
   const [waState,      setWaState]      = useState(null)   // 'open' | 'connecting' | 'close'
-  const pollRef = useRef(null)
+  const pollRef      = useRef(null)
+  const mountedRef   = useRef(true)
+  const connectionRef = useRef(connection)
+
+  // Keep connectionRef in sync without triggering effects
+  useEffect(() => { connectionRef.current = connection }, [connection])
+  // Track mount/unmount
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; stopPoll() } }, [])
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const loadConfig = useCallback(async () => {
@@ -137,9 +153,23 @@ export default function Settings() {
     try {
       const { error } = await supabase
         .from('app_config')
-        .upsert({ key, value, updated_at: new Date().toISOString() })
+        .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
       if (error) throw error
+
+      // Sync connection config to `configuracoes` table (used by services/whatsapp.js)
+      if (key === 'whatsapp_connection' && value) {
+        const rows = [
+          { chave: 'evolution_url',      valor: value.base_url || '' },
+          { chave: 'evolution_api_key',  valor: value.api_key  || '' },
+          { chave: 'evolution_instance', valor: value.instance || '' },
+        ].filter(r => r.valor)
+        if (rows.length) {
+          await supabase.from('configuracoes').upsert(rows, { onConflict: 'chave' })
+        }
+      }
+
       invalidateWhatsAppConfig()
+      invalidateConfigCache()
       setSavedKey(key)
       setTimeout(() => setSavedKey(null), 3000)
     } catch (err) {
@@ -159,27 +189,19 @@ export default function Settings() {
       if (!base_url || !instance || !api_key) {
         setTestResult('error')
         setTestMsg('Preencha todos os campos antes de testar.')
-        setTesting(false)
         return
       }
-      const url = `${base_url.replace(/\/$/, '')}/instance/connectionState/${instance}`
-      const res  = await fetch(url, { headers: { apikey: api_key } })
-      const json = await res.json().catch(() => ({}))
-
-      const state = json?.instance?.state || json?.state
-      if (res.ok && state) {
-        const stateLabels = {
-          open:       '✓ WhatsApp conectado e ativo!',
-          connecting: '⚠ API alcançada. WhatsApp ainda não conectado — escaneie o QR code.',
-          close:      '⚠ API alcançada. WhatsApp desconectado — reconecte pelo painel.',
-        }
-        const isOpen = state === 'open'
-        setTestResult(isOpen ? 'ok' : 'warn')
-        setTestMsg(stateLabels[state] || `API respondeu: estado "${state}"`)
-      } else {
+      const { status, message } = await apiTestConnection({
+        url: base_url, apiKey: api_key, instance,
+      })
+      if (status === 'open') {
+        setTestResult('ok')
+      } else if (status === 'error' || status === 'not_found') {
         setTestResult('error')
-        setTestMsg(json?.message || json?.error || `Resposta inesperada (HTTP ${res.status})`)
+      } else {
+        setTestResult('warn')
       }
+      setTestMsg(message)
     } catch (err) {
       setTestResult('error')
       setTestMsg('Falha ao conectar: ' + err.message)
@@ -192,7 +214,7 @@ export default function Settings() {
   const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
 
   const fetchWaState = async () => {
-    const { base_url, instance, api_key } = connection
+    const { base_url, instance, api_key } = connectionRef.current
     if (!base_url || !instance || !api_key) return null
     try {
       const res  = await fetch(`${base_url.replace(/\/$/, '')}/instance/connectionState/${instance}`, { headers: { apikey: api_key } })
@@ -202,7 +224,7 @@ export default function Settings() {
   }
 
   const connectWhatsApp = async () => {
-    const { base_url, instance, api_key } = connection
+    const { base_url, instance, api_key } = connectionRef.current
     if (!base_url || !instance || !api_key) {
       setQrError('Salve as credenciais antes de conectar.')
       return
@@ -212,41 +234,54 @@ export default function Settings() {
     setQrError('')
     setWaState(null)
     stopPoll()
+
+    // Clear any stale QR from Supabase
+    await supabase.from('app_config').upsert([
+      { key: 'whatsapp_qr', value: null },
+      { key: 'whatsapp_qr_ts', value: null },
+    ], { onConflict: 'key' })
+
     try {
-      const res  = await fetch(`${base_url.replace(/\/$/, '')}/instance/connect/${instance}`, { headers: { apikey: api_key } })
-      const json = await res.json().catch(() => ({}))
-      if (json?.base64) {
-        setQrData(json.base64)
-        // Poll connection state every 3s — stop when open or after 2 min
-        let ticks = 0
-        pollRef.current = setInterval(async () => {
-          ticks++
-          const state = await fetchWaState()
-          setWaState(state)
-          if (state === 'open') {
-            stopPoll()
-            setQrData(null)
-            setTestResult('ok')
-            setTestMsg('✓ WhatsApp conectado e ativo!')
-          }
-          if (ticks > 40) stopPoll()   // timeout 2 min
-        }, 3000)
-      } else if (json?.instance?.state === 'open') {
-        setWaState('open')
-        setTestResult('ok')
-        setTestMsg('✓ WhatsApp já está conectado!')
-      } else {
-        setQrError(json?.message || 'Não foi possível gerar o QR code.')
+      // Trigger connection on Evolution API (QR delivered via webhook → Supabase)
+      await fetch(`${base_url.replace(/\/$/, '')}/instance/connect/${instance}`, { headers: { apikey: api_key } }).catch(() => {})
+    } catch { /* ignore */ }
+
+    setQrLoading(false)
+    setQrError('')
+
+    // Poll Supabase every 3s for QR code or connected state (max 3 min)
+    let ticks = 0
+    pollRef.current = setInterval(async () => {
+      if (!mountedRef.current) { stopPoll(); return }
+      ticks++
+      const { data } = await supabase
+        .from('app_config')
+        .select('key, value')
+        .in('key', ['whatsapp_qr', 'whatsapp_state'])
+      if (!mountedRef.current) { stopPoll(); return }
+      const cfg = {}
+      for (const row of (data || [])) cfg[row.key] = row.value
+      const state = cfg.whatsapp_state
+      const qr    = cfg.whatsapp_qr
+      if (state) setWaState(state)
+      if (qr && typeof qr === 'string' && qr.length > 10) {
+        setQrData(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`)
       }
-    } catch (err) {
-      setQrError('Erro ao conectar: ' + err.message)
-    } finally {
-      setQrLoading(false)
-    }
+      if (state === 'open') {
+        stopPoll()
+        setQrData(null)
+        setTestResult('ok')
+        setTestMsg('✓ WhatsApp conectado e ativo!')
+      }
+      if (ticks > 60) {   // 3 min timeout
+        stopPoll()
+        if (!qr) setQrError('Tempo esgotado. Verifique o servidor e tente novamente.')
+      }
+    }, 3000)
   }
 
   const disconnectWhatsApp = async () => {
-    const { base_url, instance, api_key } = connection
+    const { base_url, instance, api_key } = connectionRef.current
     if (!base_url || !instance || !api_key) return
     stopPoll()
     try {
@@ -260,12 +295,24 @@ export default function Settings() {
     }
   }
 
-  // Carregar estado inicial ao abrir a aba
+  // Load initial WA state when switching to the connection tab (tab change only — NOT on every keystroke)
   useEffect(() => {
     if (tab !== 'conexao') return
-    fetchWaState().then(s => { if (s) setWaState(s) })
-    return () => stopPoll()
-  }, [tab, connection.base_url, connection.instance, connection.api_key])
+    let cancelled = false
+    // Load state from Supabase (set by webhook)
+    supabase.from('app_config').select('key, value').in('key', ['whatsapp_state', 'whatsapp_qr']).then(({ data }) => {
+      if (cancelled) return
+      const cfg = {}
+      for (const row of (data || [])) cfg[row.key] = row.value
+      if (cfg.whatsapp_state) setWaState(cfg.whatsapp_state)
+      if (cfg.whatsapp_qr && typeof cfg.whatsapp_qr === 'string' && cfg.whatsapp_qr.length > 10) {
+        const qr = cfg.whatsapp_qr
+        setQrData(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`)
+      }
+    })
+    fetchWaState().then(s => { if (!cancelled && s) setWaState(s) })
+    return () => { cancelled = true; stopPoll() }
+  }, [tab])  // ← only tab; connection values read from connectionRef at call time
 
   // ── Guards ───────────────────────────────────────────────────────────────────
   if (!isLiderGeral) {
@@ -413,8 +460,33 @@ export default function Settings() {
                 )}
               </div>
 
+              {/* Dev-only: send test message */}
+              {import.meta.env.DEV && (
+                <div className="flex items-center gap-3 pt-1 border-t border-[var(--color-border)] mt-1">
+                  <span className="text-2xs text-[var(--color-text-3)] font-mono bg-[var(--color-bg-2)] px-1.5 py-0.5 rounded">DEV</span>
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        await sendWhatsApp({
+                          numero: connection.api_key ? '5531999999999' : '5531999999999',
+                          mensagem: `🧪 Teste Ellos Juventude — ${new Date().toLocaleString('pt-BR')}`,
+                        })
+                        alert('Mensagem enviada — verifique o WhatsApp (ou o console em modo demo).')
+                      } catch (e) {
+                        alert('Erro: ' + e.message)
+                      }
+                    }}
+                  >
+                    Enviar mensagem de teste
+                  </Button>
+                  <span className="text-2xs text-[var(--color-text-3)]">Visível somente em desenvolvimento</span>
+                </div>
+              )}
+
               {/* QR Code panel */}
-              {(qrData || qrError || waState === 'open') && (
+              {(qrData || qrError || waState === 'open' || (waState === 'connecting' && pollRef.current)) && (
                 <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col items-center gap-3">
                   {waState === 'open' && !qrData && (
                     <div className="flex items-center gap-2 text-success-600 dark:text-success-400 text-sm font-medium">
@@ -441,8 +513,38 @@ export default function Settings() {
                     </>
                   )}
                   {qrError && (
-                    <div className="flex items-center gap-2 text-xs text-danger-600 dark:text-danger-400">
-                      <XCircle size={13} /> {qrError}
+                    <div className="flex flex-col gap-2 items-center">
+                      <div className="flex items-center gap-2 text-xs text-danger-600 dark:text-danger-400">
+                        <XCircle size={13} /> {qrError}
+                      </div>
+                      {connection.base_url && (
+                        <a
+                          href={`${connection.base_url.replace(/\/$/, '')}/manager`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary-600 dark:text-primary-400 underline hover:opacity-80"
+                        >
+                          Conectar pelo Manager externo →
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {!qrData && !qrError && waState === 'connecting' && (
+                    <div className="flex flex-col items-center gap-2 text-xs text-[var(--color-text-3)]">
+                      <div className="flex items-center gap-1.5">
+                        <Loader2 size={12} className="animate-spin" />
+                        Aguardando QR code do servidor...
+                      </div>
+                      {connection.base_url && (
+                        <a
+                          href={`${connection.base_url.replace(/\/$/, '')}/manager`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary-600 dark:text-primary-400 underline hover:opacity-80"
+                        >
+                          Conectar pelo Manager externo →
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -730,6 +832,25 @@ export default function Settings() {
       {/* ────────────────────────────── TAB: PERFIS ─────────────────────────── */}
       {tab === 'perfis' && (
         <ProfilesManager />
+      )}
+
+      {/* ────────────────────────────── TAB: MODO DEV ──────────────────────── */}
+      {tab === 'modo_dev' && (
+        <DevModeManager />
+      )}
+
+      {/* ────────────────────────────── TAB: EVENTOS ────────────────────────── */}
+      {tab === 'eventos' && (
+        <Card>
+          <div className="flex items-start gap-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 mb-4">
+            <Info size={14} className="text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+              Gerencie os eventos do departamento: cultos, retiros, células e outros.
+              Configure frequência e recorrência sem precisar de ajustes técnicos.
+            </p>
+          </div>
+          <EventsManager />
+        </Card>
       )}
 
     </div>
