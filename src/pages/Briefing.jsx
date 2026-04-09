@@ -21,6 +21,47 @@ const INSTRUMENT_OPTS = [
   { value: 'trompete', label: 'Trompete' },
 ]
 
+// ── CPAD EBD data ─────────────────────────────────────────────────────────────
+// Source: https://www.estudantesdabiblia.com.br/cpad-sumario-jovens-2026-2t.htm
+// Tema: "Entre a verdade e o engano — Combatendo ideologias e ensinos que se
+//        opõem à palavra de Deus" — comentado por Eduardo Leandro Alves
+const CPAD_LESSONS = {
+  // Key: "YYYY-QN" — first Sunday of the trimester in UTC-midnight storage format
+  // (Briefing.jsx stores Sundays as UTC midnight; in Brazil UTC-3 this is 1 day ahead)
+  '2026-Q2': {
+    inicioUTC: '2026-04-06', // April 5 local (first Sunday of April 2026)
+    licoes: [
+      { licao: 1,  titulo: 'O que é uma ideologia' },
+      { licao: 2,  titulo: 'A falácia do Materialismo Histórico' },
+      { licao: 3,  titulo: 'A falácia do Relativismo Ético-moral' },
+      { licao: 4,  titulo: 'A falácia da Ideologia de Gênero' },
+      { licao: 5,  titulo: 'A falácia da Teologia Progressista' },
+      { licao: 6,  titulo: 'A falácia do Humanismo' },
+      { licao: 7,  titulo: 'A falácia da Teoria Darwiniana' },
+      { licao: 8,  titulo: 'A falácia do Pragmatismo' },
+      { licao: 9,  titulo: 'A falácia do Ateísmo' },
+      { licao: 10, titulo: 'A falácia da Teoria do Deísmo' },
+      { licao: 11, titulo: 'A falácia da Teologia da Prosperidade' },
+      { licao: 12, titulo: 'A falácia do Triunfalismo' },
+      { licao: 13, titulo: 'O discernimento do cristão' },
+    ],
+  },
+}
+
+// Returns the EBD lesson object for a given Sunday date string (YYYY-MM-DD)
+function getEbdLesson(sundayStr) {
+  for (const key of Object.keys(CPAD_LESSONS)) {
+    const tri = CPAD_LESSONS[key]
+    const start = new Date(tri.inicioUTC + 'T00:00:00.000Z')
+    const d     = new Date(sundayStr    + 'T00:00:00.000Z')
+    const weekIndex = Math.round((d - start) / (7 * 24 * 60 * 60 * 1000))
+    if (weekIndex >= 0 && weekIndex < tri.licoes.length) {
+      return tri.licoes[weekIndex]
+    }
+  }
+  return null
+}
+
 const SUBDEPS = ['regencia', 'ebd', 'recepcao', 'midia']
 
 const SUBDEP_COLORS = {
@@ -240,6 +281,27 @@ export default function Briefing() {
       setDomingos(suns)
 
       const { data: bris } = await supabase.from('briefings').select('*').eq('ciclo_id', c.id)
+
+      // Auto-populate EBD briefings from CPAD data for any Sunday that has no record yet
+      const missing = suns.filter(
+        domingo => !bris?.find(b => b.domingo === domingo && b.subdepartamento === 'ebd')
+      )
+      if (missing.length > 0) {
+        const toInsert = missing
+          .map(domingo => {
+            const lesson = getEbdLesson(domingo)
+            if (!lesson) return null
+            return { ciclo_id: c.id, subdepartamento: 'ebd', domingo, dados_json: { licao: lesson.licao, titulo: lesson.titulo } }
+          })
+          .filter(Boolean)
+        if (toInsert.length > 0) {
+          await supabase.from('briefings').insert(toInsert)
+          const { data: refreshed } = await supabase.from('briefings').select('*').eq('ciclo_id', c.id)
+          setBriefings(refreshed || [])
+          return
+        }
+      }
+
       setBriefings(bris || [])
     } catch (err) {
       console.error('[Briefing]', err)
