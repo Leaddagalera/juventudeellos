@@ -21,10 +21,9 @@ const INSTRUMENT_OPTS = [
   { value: 'trompete', label: 'Trompete' },
 ]
 
-const SUBDEPS = ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']
+const SUBDEPS = ['regencia', 'ebd', 'recepcao', 'midia']
 
 const SUBDEP_COLORS = {
-  louvor:   'text-violet-400',
   regencia: 'text-blue-400',
   ebd:      'text-emerald-400',
   recepcao: 'text-amber-400',
@@ -117,8 +116,8 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
           <span className="text-sm font-semibold text-[var(--color-text-1)]">{tema}</span>
         </div>
 
-        {/* Louvor / Regência */}
-        {(subdep === 'louvor' || subdep === 'regencia') && (
+        {/* Regência */}
+        {subdep === 'regencia' && (
           <div className="space-y-3">
             <Input label="Hino(s)" placeholder="Ex: Grande é o Senhor" value={form.hinos || ''} onChange={e => set('hinos', e.target.value)} disabled={readOnly} />
             <Input label="Tom" placeholder="Ex: G maior" value={form.tom || ''} onChange={e => set('tom', e.target.value)} disabled={readOnly} />
