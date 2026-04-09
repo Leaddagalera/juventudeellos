@@ -22,6 +22,10 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Activate new SW immediately and take control of all clients.
+        // Without this, the old cached JS runs until all tabs are closed.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
