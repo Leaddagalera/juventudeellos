@@ -138,7 +138,7 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
       onClose={onClose}
       title={`${subdepLabel(subdep)} — ${formatDomingoShort(domingo)}`}
       size="md"
-      footer={!readOnly && subdep !== 'ebd' ? (
+      footer={!readOnly ? (
         <>
           <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" onClick={handleSave} loading={loading}>
@@ -174,11 +174,41 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
 
         {/* EBD */}
         {subdep === 'ebd' && (
-          <div className="space-y-2">
-            <div className="alert-strip info text-xs">Conteúdo importado automaticamente da CPAD</div>
-            {form.titulo     && <div className="flex flex-col gap-0.5"><span className="text-2xs text-[var(--color-text-3)]">Lição</span><span className="text-sm font-medium">{form.titulo}</span></div>}
-            {form.texto_base && <div className="flex flex-col gap-0.5"><span className="text-2xs text-[var(--color-text-3)]">Base bíblica</span><span className="text-sm">{form.texto_base}</span></div>}
-            {!form.titulo    && <p className="text-xs text-[var(--color-text-3)]">Aguardando importação da CPAD...</p>}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--color-text-3)]">Conteúdo CPAD — editável</span>
+              <a
+                href={`https://www.google.com/search?q=CPAD+jovens+2026+segundo+trimestre+${form.licao ? `lição+${form.licao}` : (form.titulo ? encodeURIComponent(form.titulo) : 'EBD')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-400 font-medium"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                Buscar na Web
+              </a>
+            </div>
+            <Input
+              label="Título da lição"
+              placeholder="Ex: A falácia do Materialismo Histórico"
+              value={form.titulo || ''}
+              onChange={e => set('titulo', e.target.value)}
+              disabled={readOnly}
+            />
+            <Input
+              label="Base bíblica"
+              placeholder="Ex: Colossenses 2.8"
+              value={form.texto_base || ''}
+              onChange={e => set('texto_base', e.target.value)}
+              disabled={readOnly}
+            />
+            <Textarea
+              label="Observações"
+              placeholder="Informações adicionais para a equipe..."
+              value={form.observacoes || ''}
+              onChange={e => set('observacoes', e.target.value)}
+              rows={2}
+              disabled={readOnly}
+            />
           </div>
         )}
 
