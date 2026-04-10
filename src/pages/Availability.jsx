@@ -452,13 +452,10 @@ export default function Availability() {
 
       {/* Save button */}
       {inWindow && (
-        <div className="flex items-center gap-2 sticky bottom-20 lg:bottom-4">
-          <Button fullWidth size="lg" onClick={handleSave} loading={saving}>
-            <Save size={16} />
-            Salvar disponibilidade
-          </Button>
-          {saved && <span className="text-xs text-success-500 font-medium whitespace-nowrap">✓ Salvo!</span>}
-        </div>
+        <Button fullWidth size="lg" onClick={handleSave} loading={saving}>
+          {saved ? <CheckCircle2 size={16} /> : <Save size={16} />}
+          {saved ? 'Salvo!' : 'Salvar disponibilidade'}
+        </Button>
       )}
 
     </div>
