@@ -248,12 +248,23 @@ export default function DevModeManager() {
       const { data: disps } = await supabase
         .from('disponibilidades').select('user_id, domingo')
         .eq('ciclo_id', cycle.id).eq('disponivel', true)
-      const dispSet = new Set((disps||[]).map(r => `${r.user_id}:${r.domingo}`))
+
+      if (!disps || disps.length === 0) {
+        alert('Nenhum membro preencheu disponibilidade para este ciclo.\n\nPeça para os membros acessarem a tela de Disponibilidade e marcarem os domingos antes de gerar a escala.')
+        return
+      }
+
+      const dispSet = new Set(disps.map(r => `${r.user_id}:${r.domingo}`))
 
       // 3. Get all active members (membro_serve + lider_funcao) with their subdeps
       const { data: members } = await supabase
         .from('users').select('id, subdepartamento')
         .eq('ativo', true).in('role', ['membro_serve', 'lider_funcao'])
+
+      if (!members || members.length === 0) {
+        alert('Nenhum membro ativo encontrado.\n\nVerifique se os membros têm papel "Membro serve" ou "Líder de função" e estão ativos.')
+        return
+      }
 
       const subdeps = Object.keys(sysConfig.slots)
 
@@ -288,12 +299,14 @@ export default function DevModeManager() {
         }
       }
 
-      // 6. Replace existing escalas and advance status
-      await supabase.from('escalas').delete().eq('ciclo_id', cycle.id)
-      if (rows.length > 0) {
-        const { error } = await supabase.from('escalas').insert(rows)
-        if (error) throw error
+      // 6. Replace existing escalas and advance status (only if there are rows)
+      if (rows.length === 0) {
+        alert('Nenhuma escalação foi gerada.\n\nIsso ocorre quando os membros que preencheram disponibilidade não pertencem a nenhum subdepartamento configurado.')
+        return
       }
+      await supabase.from('escalas').delete().eq('ciclo_id', cycle.id)
+      const { error } = await supabase.from('escalas').insert(rows)
+      if (error) throw error
       await supabase.from('ciclos').update({ status: 'escala_publicada' }).eq('id', cycle.id)
       await loadCycles()
       setGenResult({ cicloId: cycle.id, count: rows.length })
@@ -461,9 +474,9 @@ export default function DevModeManager() {
                           )}
                         </div>
                         {genResult?.cicloId === cy.id && (
-                          <div className="flex items-center gap-1.5 text-xs text-success-600 dark:text-success-400 bg-success-50 dark:bg-success-900/20 rounded-lg px-3 py-2">
-                            <CheckCircle size={13} />
-                            Escala gerada: {genResult.count} escalações — ciclo avançado para "Escala publicada"
+                          <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-1)] bg-success-500/10 border border-success-500/30 rounded-lg px-3 py-2">
+                            <CheckCircle size={13} className="text-success-500 flex-shrink-0" />
+                            Escala gerada: <strong>{genResult.count}</strong> escalações — ciclo avançado para &quot;Escala publicada&quot;
                           </div>
                         )}
                       </div>
