@@ -60,11 +60,22 @@ function fmtDate(d) {
   return `${dd}/${m}/${y}`
 }
 
-function cycleDayInfo(inicio, duracao = 45) {
-  if (!inicio) return null
-  const diff = Math.floor((Date.now() - new Date(inicio).getTime()) / 86_400_000)
-  const dia   = diff + 1
-  return { dia: Math.max(1, dia), total: duracao, pct: Math.min(100, Math.round((dia / duracao) * 100)) }
+// Returns timing info relative to TODAY for a service-period cycle.
+// inicio/fim = the future service dates (the Sundays being planned).
+function cycleDayInfo(inicio, fim) {
+  if (!inicio || !fim) return null
+  const now      = Date.now()
+  const startMs  = new Date(inicio + 'T00:00:00').getTime()
+  const endMs    = new Date(fim    + 'T00:00:00').getTime()
+  const totalDays = Math.max(1, Math.round((endMs - startMs) / 86_400_000))
+  const daysUntil = Math.ceil((startMs - now) / 86_400_000)
+
+  if (daysUntil > 0) {
+    return { future: true, daysUntil, totalDays }
+  }
+  const elapsed = Math.floor((now - startMs) / 86_400_000) + 1
+  const pct     = Math.min(100, Math.round((elapsed / totalDays) * 100))
+  return { future: false, elapsed, totalDays, pct }
 }
 
 // ── Cycle status badge ────────────────────────────────────────────────────────
@@ -93,9 +104,27 @@ function CycleModal({ cycle, onSave, onClose, saving }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="rounded-xl bg-primary-500/10 border border-primary-500/20 px-3 py-2 text-xs text-[var(--color-text-2)] leading-relaxed">
+        Informe as datas do <strong>período de serviço</strong> — os domingos que serão planejados.
+        O preenchimento de briefings e disponibilidade deve ocorrer ~30 dias antes do início.
+      </div>
       <div className="grid grid-cols-2 gap-3">
-        <Input label="Data de início *" type="date" value={form.inicio} onChange={e => set('inicio', e.target.value)} required />
-        <Input label="Data de fim *"    type="date" value={form.fim}    onChange={e => set('fim', e.target.value)}    required />
+        <Input
+          label="1º domingo do serviço *"
+          type="date"
+          hint="Data futura — início do período planejado"
+          value={form.inicio}
+          onChange={e => set('inicio', e.target.value)}
+          required
+        />
+        <Input
+          label="Último domingo do serviço *"
+          type="date"
+          hint="Data futura — fim do período planejado"
+          value={form.fim}
+          onChange={e => set('fim', e.target.value)}
+          required
+        />
       </div>
 
       <div>
@@ -366,7 +395,8 @@ export default function DevModeManager() {
           title={<span className="flex items-center gap-1.5"><Layers size={14} /> Ciclos operacionais</span>}
         >
           <p className="text-xs text-[var(--color-text-3)] mb-3">
-            Gerencie os ciclos de planejamento. Cada ciclo tem ~{cfg.cycle_duration} dias e passa por várias fases.
+            Cada ciclo define um <strong>período de serviço futuro</strong> (os domingos planejados).
+            O trabalho de briefing, disponibilidade e geração de escala acontece ~30 dias antes do início do serviço.
           </p>
 
           {cyclesLoading ? (
@@ -378,7 +408,7 @@ export default function DevModeManager() {
               )}
 
               {cycles.map(cy => {
-                const info = cycleDayInfo(cy.inicio, cfg.cycle_duration)
+                const info = cycleDayInfo(cy.inicio, cy.fim)
                 const isExp = expandedCycle === cy.id
                 const nextStatus = STATUS_FLOW[STATUS_FLOW.indexOf(cy.status) + 1]
 
@@ -399,7 +429,9 @@ export default function DevModeManager() {
                         </div>
                         {info && (
                           <p className="text-xs text-[var(--color-text-3)] mt-0.5">
-                            Dia {info.dia} de {info.total} · {info.pct}% concluído
+                            {info.future
+                              ? `Serviço começa em ${info.daysUntil} dia${info.daysUntil !== 1 ? 's' : ''} · ${info.totalDays} dias de cobertura`
+                              : `Dia ${info.elapsed} de ${info.totalDays} do serviço · ${info.pct}% concluído`}
                           </p>
                         )}
                       </div>
@@ -413,10 +445,16 @@ export default function DevModeManager() {
                         {info && (
                           <div>
                             <div className="flex justify-between text-2xs text-[var(--color-text-3)] mb-1">
-                              <span>Dia {info.dia}</span><span>{info.total} dias total</span>
+                              {info.future
+                                ? <><span className="text-primary-400">Período de serviço ainda não iniciou</span><span>em {info.daysUntil}d</span></>
+                                : <><span>Dia {info.elapsed} do serviço</span><span>{info.totalDays} dias total</span></>
+                              }
                             </div>
                             <div className="h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
-                              <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${info.pct}%` }} />
+                              <div
+                                className={cn('h-full rounded-full transition-all', info.future ? 'bg-primary-400/40' : 'bg-primary-500')}
+                                style={{ width: info.future ? '100%' : `${info.pct}%` }}
+                              />
                             </div>
                           </div>
                         )}
