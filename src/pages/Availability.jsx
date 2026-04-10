@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, EmptyState, Skeleton } from '../components/ui/Card.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { formatDomingo, subdepLabel } from '../lib/utils.js'
-import { getSysConfig } from '../lib/sysConfig.js'
 import { cn } from '../lib/utils.js'
 
 // ── Calendar helpers ──────────────────────────────────────────────────────────
@@ -63,7 +62,6 @@ export default function Availability() {
   const [saving,       setSaving]       = useState(false)
   const [saved,        setSaved]        = useState(false)
   const [inWindow,     setInWindow]     = useState(false)
-  const [sysConfig,    setSysConfig]    = useState(null)
 
   // Calendar navigation
   const [viewYear,  setViewYear]  = useState(new Date().getFullYear())
@@ -89,15 +87,9 @@ export default function Availability() {
   async function loadData(isCancelled = () => false) {
     setLoading(true)
     try {
-      // Load sys config for window days
-      const cfg = await getSysConfig()
-      if (isCancelled()) return
-
-      setSysConfig(cfg)
-
       const { data: ciclos } = await supabase
         .from('ciclos').select('*')
-        .in('status', ['disponibilidade', 'briefing_lider', 'escala_publicada'])
+        .in('status', ['briefing_regente', 'briefing_lider', 'disponibilidade', 'escala_publicada', 'confirmacoes'])
         .order('inicio', { ascending: false }).limit(1)
       if (isCancelled()) return
 
@@ -105,14 +97,11 @@ export default function Availability() {
       if (!c) { setLoading(false); return }
       setCiclo(c)
 
-      // Is the availability window open?
-      const dia = Math.floor((Date.now() - new Date(c.inicio).getTime()) / 86_400_000) + 1
-      const winStart = cfg.avail_window_start ?? 6
-      const winEnd   = cfg.avail_window_end   ?? 20
-      setInWindow(dia >= winStart && dia <= winEnd)
+      // Window is open when and only when the cycle is in 'disponibilidade' phase
+      setInWindow(c.status === 'disponibilidade')
 
       // Point calendar to cycle start month
-      const startDate = new Date(c.inicio)
+      const startDate = new Date(c.inicio + 'T00:00:00')
       setViewYear(startDate.getFullYear())
       setViewMonth(startDate.getMonth())
 
@@ -190,7 +179,6 @@ export default function Availability() {
   const pct    = total > 0 ? Math.round((filled / total) * 100) : 0
   const grid   = buildGrid(viewYear, viewMonth)
   const today  = new Date().toISOString().split('T')[0]
-  const winEnd = sysConfig?.avail_window_end ?? 20
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
@@ -227,9 +215,7 @@ export default function Availability() {
       <div>
         <h2 className="text-lg font-semibold text-[var(--color-text-1)]">Disponibilidade</h2>
         <p className="text-xs text-[var(--color-text-3)]">
-          {inWindow
-            ? `Janela aberta · marque até o dia ${winEnd} do ciclo`
-            : 'Fora da janela de preenchimento'}
+          {inWindow ? 'Janela aberta' : 'Fora da janela de preenchimento'}
         </p>
       </div>
 
@@ -255,7 +241,7 @@ export default function Availability() {
       {!inWindow && (
         <div className="alert-strip warning">
           <Clock size={13} />
-          <span>A janela {ciclo.status === 'escala_publicada' ? 'está encerrada' : 'ainda não abriu'}</span>
+          <span>A janela {['escala_publicada','confirmacoes','encerrado'].includes(ciclo.status) ? 'está encerrada' : 'ainda não abriu'}</span>
         </div>
       )}
 

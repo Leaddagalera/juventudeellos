@@ -26,10 +26,8 @@ const INSTRUMENT_OPTS = [
 // Tema: "Entre a verdade e o engano — Combatendo ideologias e ensinos que se
 //        opõem à palavra de Deus" — comentado por Eduardo Leandro Alves
 const CPAD_LESSONS = {
-  // Key: "YYYY-QN" — first Sunday of the trimester in UTC-midnight storage format
-  // (Briefing.jsx stores Sundays as UTC midnight; in Brazil UTC-3 this is 1 day ahead)
   '2026-Q2': {
-    inicioUTC: '2026-04-06', // April 5 local (first Sunday of April 2026)
+    inicio: '2026-04-05', // first Sunday of Q2 2026 (local date)
     licoes: [
       { licao: 1,  titulo: 'O que é uma ideologia' },
       { licao: 2,  titulo: 'A falácia do Materialismo Histórico' },
@@ -52,8 +50,8 @@ const CPAD_LESSONS = {
 function getEbdLesson(sundayStr) {
   for (const key of Object.keys(CPAD_LESSONS)) {
     const tri = CPAD_LESSONS[key]
-    const start = new Date(tri.inicioUTC + 'T00:00:00.000Z')
-    const d     = new Date(sundayStr    + 'T00:00:00.000Z')
+    const start = new Date(tri.inicio + 'T00:00:00')  // local midnight
+    const d     = new Date(sundayStr  + 'T00:00:00')  // local midnight
     const weekIndex = Math.round((d - start) / (7 * 24 * 60 * 60 * 1000))
     if (weekIndex >= 0 && weekIndex < tri.licoes.length) {
       return tri.licoes[weekIndex]
@@ -299,13 +297,16 @@ export default function Briefing() {
       if (!c) { setLoading(false); return }
       setCiclo(c)
 
-      const start = new Date(c.inicio)
-      const end   = new Date(c.fim)
-      const suns  = []
-      const d = new Date(start)
+      // Parse as local midnight to avoid UTC-offset date shift (same as Availability.jsx)
+      const end  = new Date(c.fim   + 'T00:00:00')
+      const suns = []
+      const d    = new Date(c.inicio + 'T00:00:00')
       while (d.getDay() !== 0) d.setDate(d.getDate() + 1)
       while (d <= end) {
-        suns.push(d.toISOString().split('T')[0])
+        const y  = d.getFullYear()
+        const mo = String(d.getMonth() + 1).padStart(2, '0')
+        const dy = String(d.getDate()).padStart(2, '0')
+        suns.push(`${y}-${mo}-${dy}`)
         d.setDate(d.getDate() + 7)
       }
       setDomingos(suns)
