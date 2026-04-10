@@ -346,15 +346,30 @@ export default function Briefing() {
   const getBriefing = (domingo, subdep) =>
     briefings.find(b => b.domingo === domingo && b.subdepartamento === subdep)
 
-  const dia = ciclo
-    ? Math.floor((Date.now() - new Date(ciclo.inicio).getTime()) / (1000 * 60 * 60 * 24)) + 1
-    : 0
+  const STATUS_LABEL = {
+    briefing_regente: 'Preenchimento — Regentes',
+    briefing_lider:   'Preenchimento — Líderes',
+    disponibilidade:  'Disponibilidade aberta',
+    escala_publicada: 'Escala publicada',
+    confirmacoes:     'Confirmações',
+    encerrado:        'Encerrado',
+  }
 
+  // Briefings só são editáveis durante as fases de preenchimento,
+  // e cada fase libera apenas o papel correto.
   const canEdit = (subdep) => {
+    if (!ciclo) return false
+    const { status } = ciclo
+    if (status !== 'briefing_regente' && status !== 'briefing_lider') return false
     if (isLiderGeral) return true
-    if (isLiderFuncao && mySubdeps.includes(subdep)) return true
+    // briefing_regente → somente regentes editam 'regencia'
+    if (status === 'briefing_regente') return subdep === 'regencia' && mySubdeps.includes('regencia')
+    // briefing_lider → lider_funcao edita seus subdeps
+    if (status === 'briefing_lider') return isLiderFuncao && mySubdeps.includes(subdep)
     return false
   }
+
+  const isEditPhase = ciclo && ['briefing_regente', 'briefing_lider'].includes(ciclo.status)
 
   if (loading) return (
     <div className="p-4 lg:p-6 space-y-3 max-w-6xl mx-auto">
@@ -408,13 +423,29 @@ export default function Briefing() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-text-1)]">Briefings</h2>
-          <p className="text-xs text-[var(--color-text-3)]">Ciclo atual · Dia {dia} de {sysConfig.cycle_duration}</p>
+          <p className="text-xs text-[var(--color-text-3)]">
+            {ciclo ? (STATUS_LABEL[ciclo.status] || ciclo.status) : ''}
+          </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => loadBriefings(false)}>
           <RefreshCw size={13} />
           Atualizar
         </Button>
       </div>
+
+      {/* Banner de fase */}
+      {ciclo && !isEditPhase && (
+        <div className="alert-strip info">
+          <AlertCircle size={13} />
+          <span>Briefings em modo de leitura — fase atual: <strong>{STATUS_LABEL[ciclo.status] || ciclo.status}</strong></span>
+        </div>
+      )}
+      {ciclo?.status === 'briefing_regente' && !isLiderGeral && !mySubdeps.includes('regencia') && (
+        <div className="alert-strip info">
+          <AlertCircle size={13} />
+          <span>Aguardando preenchimento das Regentes. Briefings em leitura para os demais.</span>
+        </div>
+      )}
 
       {/* Tabs */}
       {tabs.length > 1 && (
