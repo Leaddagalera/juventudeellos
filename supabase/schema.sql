@@ -60,14 +60,16 @@ create table if not exists public.briefings (
 );
 
 -- ── DISPONIBILIDADES ─────────────────────────────────────────────────────────
+-- One row per user × ciclo × domingo × subdepartamento
 create table if not exists public.disponibilidades (
-  id        uuid primary key default uuid_generate_v4(),
-  user_id   uuid not null references public.users(id) on delete cascade,
-  ciclo_id  uuid not null references public.ciclos(id) on delete cascade,
-  domingo   date not null,
-  disponivel boolean not null,
-  created_at timestamptz not null default now(),
-  unique (user_id, ciclo_id, domingo)
+  id              uuid primary key default uuid_generate_v4(),
+  user_id         uuid not null references public.users(id) on delete cascade,
+  ciclo_id        uuid not null references public.ciclos(id) on delete cascade,
+  domingo         date not null,
+  subdepartamento text not null,
+  disponivel      boolean not null,
+  created_at      timestamptz not null default now(),
+  unique (user_id, ciclo_id, domingo, subdepartamento)
 );
 
 create index if not exists disp_ciclo_domingo on public.disponibilidades (ciclo_id, domingo);
