@@ -1,6 +1,7 @@
 /**
  * Utility helpers
  */
+import { getProfileLabel } from './permissions.js'
 
 export function cn(...classes) {
   return classes.filter(Boolean).join(' ')
@@ -66,6 +67,9 @@ export function subdepLabel(subdep) {
 }
 
 export function roleLabel(role) {
+  const dynamic = getProfileLabel(role)
+  if (dynamic) return dynamic
+
   const map = {
     lider_geral:       'Líder Geral',
     lider_funcao:      'Líder de Função',

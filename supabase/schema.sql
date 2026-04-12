@@ -7,14 +7,26 @@
 create extension if not exists "uuid-ossp";
 create extension if not exists "pg_trgm";
 
+-- ── PERFIS ──────────────────────────────────────────────────────────────────
+create table if not exists public.perfis (
+  id               uuid primary key default uuid_generate_v4(),
+  nome             text unique not null,
+  label            text not null,
+  descricao        text,
+  protegido        boolean not null default false,
+  telas            text[] default '{}',
+  acoes            text[] default '{}',
+  campos_visiveis  text[] default '{}',
+  criado_em        timestamptz not null default now()
+);
+
 -- ── USERS ────────────────────────────────────────────────────────────────────
 create table if not exists public.users (
   id               uuid primary key references auth.users(id) on delete cascade,
   nome             text not null,
   email            text unique not null,
   whatsapp         text,
-  role             text not null default 'membro_observador'
-                   check (role in ('lider_geral','lider_funcao','membro_serve','membro_observador')),
+  role             text not null default 'membro_observador',
   subdepartamento  text[] default '{}', -- array: membro pode estar em múltiplos subdeps
   instrumento      text[] default '{}', -- array of instruments for louvor
   data_nascimento  date,
@@ -155,6 +167,7 @@ create table if not exists public.notificacoes_log (
 -- ============================================================
 
 -- Enable RLS on all tables
+alter table public.perfis         enable row level security;
 alter table public.users          enable row level security;
 alter table public.ciclos         enable row level security;
 alter table public.briefings      enable row level security;
@@ -176,6 +189,23 @@ create or replace function public.is_lider()
 returns boolean language sql security definer stable as $$
   select role in ('lider_geral','lider_funcao') from public.users where id = auth.uid()
 $$;
+
+-- Check if user has a specific action permission via perfis table
+create or replace function public.user_has_action(action_name text)
+returns boolean language sql security definer stable as $$
+  select exists(
+    select 1 from public.perfis p
+    join public.users u on u.role = p.nome
+    where u.id = auth.uid()
+    and action_name = any(p.acoes)
+  )
+$$;
+
+-- PERFIS policies — all authenticated can read; only lider_geral can write
+create policy "Perfis: all read"    on public.perfis for select using (auth.uid() is not null);
+create policy "Perfis: lider write" on public.perfis for insert  with check (public.current_user_role() = 'lider_geral');
+create policy "Perfis: lider update" on public.perfis for update using (public.current_user_role() = 'lider_geral');
+create policy "Perfis: lider delete" on public.perfis for delete using (public.current_user_role() = 'lider_geral');
 
 -- USERS policies
 create policy "Users: read own or lider reads all"
@@ -221,11 +251,11 @@ create policy "Trocas: own or lider"
   using (solicitante_id = auth.uid() or public.is_lider())
   with check (solicitante_id = auth.uid() or public.is_lider());
 
--- VISITANTES — serve/lider write; all read
+-- VISITANTES — serve/lider/custom profiles with registrar_visitante can write; all read
 create policy "Visit: all read"    on public.visitantes for select using (auth.uid() is not null);
 create policy "Visit: serve write" on public.visitantes for all
-  using (public.current_user_role() in ('lider_geral','lider_funcao','membro_serve'))
-  with check (public.current_user_role() in ('lider_geral','lider_funcao','membro_serve'));
+  using (public.current_user_role() in ('lider_geral','lider_funcao','membro_serve') or public.user_has_action('registrar_visitante'))
+  with check (public.current_user_role() in ('lider_geral','lider_funcao','membro_serve') or public.user_has_action('registrar_visitante'));
 
 -- CONTEÚDO LOGIN — approved: all read; pending: own or lider
 create policy "Media: public read" on public.conteudo_login for select
@@ -284,6 +314,32 @@ $$;
 create trigger trg_auto_promote_founder
   before insert on public.users
   for each row execute function public.auto_promote_founder();
+
+-- ============================================================
+-- Seed: default profiles
+-- ============================================================
+insert into public.perfis (nome, label, descricao, protegido, telas, acoes, campos_visiveis) values
+  ('lider_geral', 'Líder Geral', 'Acesso total ao sistema', true,
+    array['dashboard','escalas','briefings','disponibilidade','visitantes','membros','relatorios','comunicados','midia_login','configuracoes'],
+    array['aprovar_cadastro','aprovar_troca','aprovar_midia','editar_membro','excluir_membro','promover_membro','editar_tarja','preencher_briefing','confirmar_presenca','solicitar_troca','registrar_visitante','criar_comunicado','ver_relatorios','gerenciar_perfis'],
+    array['tarja','dados_pessoais','historico_servico','escala_geral','escala_propria','briefing_completo','saude_subdeps','alertas_sistema','dados_visitantes']
+  ),
+  ('lider_funcao', 'Líder de Função', 'Líder de subdepartamento', true,
+    array['dashboard','escalas','briefings','disponibilidade','comunicados'],
+    array['preencher_briefing','confirmar_presenca','solicitar_troca'],
+    array['historico_servico','escala_geral','briefing_completo','saude_subdeps']
+  ),
+  ('membro_serve', 'Membro que Serve', 'Membro ativo que serve em escalas', true,
+    array['dashboard','escalas','disponibilidade'],
+    array['confirmar_presenca','solicitar_troca'],
+    array['historico_servico','escala_propria']
+  ),
+  ('membro_observador', 'Observador', 'Membro com acesso limitado', true,
+    array['dashboard','escalas','briefings'],
+    array[]::text[],
+    array['escala_geral','briefing_completo']
+  )
+on conflict (nome) do nothing;
 
 -- ============================================================
 -- Seed: first cycle (optional — remove if creating via app)

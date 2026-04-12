@@ -24,14 +24,14 @@ const TARJA_OPTS = [
   { value: 'prodigo',   label: 'Filho Pródigo' },
 ]
 
-const ROLE_OPTS = [
+const ROLE_OPTS_FALLBACK = [
   { value: 'lider_geral',       label: 'Líder Geral' },
   { value: 'lider_funcao',      label: 'Líder de Função' },
   { value: 'membro_serve',      label: 'Membro que Serve' },
   { value: 'membro_observador', label: 'Observador' },
 ]
 
-function EditMemberModal({ member, onClose, onSave }) {
+function EditMemberModal({ member, onClose, onSave, roleOpts }) {
   const [form,    setForm]    = useState(member || {})
   const [loading, setLoading] = useState(false)
 
@@ -89,7 +89,7 @@ function EditMemberModal({ member, onClose, onSave }) {
         <Input label="Nome" value={form.nome || ''} onChange={e => set('nome', e.target.value)} />
         <Input label="WhatsApp" value={form.whatsapp || ''} onChange={e => set('whatsapp', e.target.value)} />
         <Select label="Perfil" value={form.role || ''} onChange={e => set('role', e.target.value)}>
-          {ROLE_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {roleOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
 
         {/* ── Campos exclusivos para Líder de Função ── */}
@@ -163,16 +163,27 @@ export default function Members() {
   const [delMember,  setDelMember]  = useState(null)
   const [delLoading, setDelLoading] = useState(false)
   const [pendentes,  setPendentes]  = useState([])
+  const [roleOpts,   setRoleOpts]   = useState(ROLE_OPTS_FALLBACK)
 
   const loadMembers = useCallback(async () => {
     setLoading(true)
     try {
-      let q = supabase.from('users').select('*').order('nome', { ascending: true })
-      if (!isLiderGeral) q = q.eq('ativo', true)
-      const { data, error } = await q
-      if (error) throw error
-      setMembers(data || [])
-      setPendentes((data || []).filter(m => !m.ativo))
+      let usersQuery = supabase.from('users').select('*').order('nome', { ascending: true })
+      if (!isLiderGeral) usersQuery = usersQuery.eq('ativo', true)
+
+      const [usersRes, perfisRes] = await Promise.all([
+        usersQuery,
+        supabase.from('perfis').select('nome, label').order('criado_em', { ascending: true }),
+      ])
+
+      if (usersRes.error) throw usersRes.error
+      setMembers(usersRes.data || [])
+      setPendentes((usersRes.data || []).filter(m => !m.ativo))
+
+      // Build dynamic role options from perfis table
+      if (perfisRes.data && perfisRes.data.length > 0) {
+        setRoleOpts(perfisRes.data.map(p => ({ value: p.nome, label: p.label })))
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -255,7 +266,7 @@ export default function Members() {
         </div>
         <Select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="sm:w-44">
           <option value="">Todos os perfis</option>
-          {ROLE_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {roleOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
         {isLiderGeral && (
           <Select value={tarjaFilter} onChange={e => setTarjaFilter(e.target.value)} className="sm:w-44">
@@ -301,7 +312,7 @@ export default function Members() {
                           </div>
                         </div>
                       </Td>
-                      <Td><RoleBadge role={m.role} /></Td>
+                      <Td><RoleBadge role={m.role} label={roleOpts.find(o => o.value === m.role)?.label} /></Td>
                       {/* Líder de */}
                       <Td>
                         {m.subdep_lider
@@ -375,7 +386,7 @@ export default function Members() {
       </Card>
 
       {editMember && (
-        <EditMemberModal member={editMember} onClose={() => setEditMember(null)} onSave={loadMembers} />
+        <EditMemberModal member={editMember} onClose={() => setEditMember(null)} onSave={loadMembers} roleOpts={roleOpts} />
       )}
 
       <ConfirmModal
