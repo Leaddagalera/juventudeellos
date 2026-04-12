@@ -86,6 +86,32 @@ export const DEFAULT_PERMISSIONS = {
   },
 }
 
+// ── Profile labels cache ──────────────────────────────────────────────────────
+
+const _labelsCache = {}
+let _labelsCacheAt = 0
+
+export async function loadProfileLabels() {
+  const now = Date.now()
+  if (Object.keys(_labelsCache).length > 0 && (now - _labelsCacheAt) < CACHE_TTL) {
+    return _labelsCache
+  }
+  try {
+    const { data } = await supabase.from('perfis').select('nome, label')
+    if (data) {
+      for (const p of data) _labelsCache[p.nome] = p.label
+      _labelsCacheAt = now
+    }
+  } catch (e) {
+    console.warn('[Permissions] erro ao carregar labels:', e?.message)
+  }
+  return _labelsCache
+}
+
+export function getProfileLabel(role) {
+  return _labelsCache[role] || null
+}
+
 // ── Module-level cache (5 min TTL) ────────────────────────────────────────────
 
 const _cache    = {}
@@ -154,7 +180,10 @@ export function usePermissions() {
     setPerms(DEFAULT_PERMISSIONS[role] || { telas: [], acoes: [], campos_visiveis: [] })
     setLoaded(false)
 
-    getPerfilPermissions(role).then(p => {
+    Promise.all([
+      getPerfilPermissions(role),
+      loadProfileLabels(),
+    ]).then(([p]) => {
       if (!cancelled) { setPerms(p); setLoaded(true) }
     })
 

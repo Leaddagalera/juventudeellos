@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils.js'
+import { getProfileLabel } from '../../lib/permissions.js'
 
 const variants = {
   default:  'bg-[var(--color-bg-2)] text-[var(--color-text-2)] border-[var(--color-border)]',
@@ -58,13 +59,22 @@ export function SubdepBadge({ subdep }) {
   return <Badge subdep={subdep}>{labels[subdep] || subdep}</Badge>
 }
 
-export function RoleBadge({ role }) {
-  const map = {
-    lider_geral:      { label: 'Líder Geral',   variant: 'primary' },
-    lider_funcao:     { label: 'Líder Função',  variant: 'blue' },
-    membro_serve:     { label: 'Serve',          variant: 'green' },
-    membro_observador:{ label: 'Observador',     variant: 'gray' },
-  }
-  const r = map[role] || { label: role, variant: 'default' }
-  return <Badge variant={r.variant}>{r.label}</Badge>
+const ROLE_VARIANT_MAP = {
+  lider_geral:      'primary',
+  lider_funcao:     'blue',
+  membro_serve:     'green',
+  membro_observador:'gray',
+}
+
+const ROLE_LABEL_MAP = {
+  lider_geral:      'Líder Geral',
+  lider_funcao:     'Líder Função',
+  membro_serve:     'Serve',
+  membro_observador:'Observador',
+}
+
+export function RoleBadge({ role, label }) {
+  const variant = ROLE_VARIANT_MAP[role] || 'default'
+  const displayLabel = label || ROLE_LABEL_MAP[role] || getProfileLabel(role) || role
+  return <Badge variant={variant}>{displayLabel}</Badge>
 }
