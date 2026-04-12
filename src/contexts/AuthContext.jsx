@@ -25,8 +25,12 @@ export function AuthProvider({ children }) {
   const fetchProfile = useCallback(async (userId) => {
     setProfileLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('users').select('*').eq('id', userId).single()
+      const { data, error } = await Promise.race([
+        supabase.from('users').select('*').eq('id', userId).single(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('profile-timeout')), 30000)
+        ),
+      ])
       if (error) throw error
       setProfile(data)
       return data
