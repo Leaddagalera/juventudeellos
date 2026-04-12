@@ -25,13 +25,8 @@ export function AuthProvider({ children }) {
   const fetchProfile = useCallback(async (userId) => {
     setProfileLoading(true)
     try {
-      // 8s timeout — prevents hanging on Supabase cold starts (free tier can take 30s+)
-      const { data, error } = await Promise.race([
-        supabase.from('users').select('*').eq('id', userId).single(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('profile-timeout')), 8000)
-        ),
-      ])
+      const { data, error } = await supabase
+        .from('users').select('*').eq('id', userId).single()
       if (error) throw error
       setProfile(data)
       return data
@@ -41,7 +36,7 @@ export function AuthProvider({ children }) {
       return null
     } finally {
       setProfileLoading(false)
-      setProfileAttempted(true)  // always fires — even on error/timeout
+      setProfileAttempted(true)
     }
   }, [])
 
@@ -50,20 +45,12 @@ export function AuthProvider({ children }) {
 
     async function init() {
       try {
-        // 15s timeout — generous enough for slow networks and Supabase cold starts
-        const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('auth-timeout')), 15000)
-        )
-        const { data: { session } } = await Promise.race([
-          supabase.auth.getSession(),
-          timeout,
-        ])
+        const { data: { session } } = await supabase.auth.getSession()
         if (!mounted) return
         setSession(session)
         if (session?.user) await fetchProfile(session.user.id)
       } catch (err) {
-        if (err.message !== 'auth-timeout') console.warn('[Auth] init failed:', err)
-        // On timeout: leave session/profile as null → user will see login
+        console.warn('[Auth] init failed:', err)
       } finally {
         if (mounted) {
           setLoading(false)
@@ -137,32 +124,28 @@ export function AuthProvider({ children }) {
   }
 
   const signUp = async (email, password, profileData) => {
+    // Pass all profile data via metadata so the DB trigger can create
+    // the public.users row even when email confirmation is enabled
+    // (in that case there's no active session, so client-side INSERT would fail RLS).
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { nome: profileData.nome } }
+      options: {
+        data: {
+          nome:            profileData.nome,
+          whatsapp:        profileData.whatsapp,
+          data_nascimento: profileData.data_nascimento,
+          estado_civil:    profileData.estado_civil,
+          endereco:        profileData.endereco,
+          subdepartamento: profileData.subdepartamento,
+          instrumento:     profileData.instrumento || [],
+          data_entrada:    profileData.data_entrada,
+        }
+      }
     })
     if (error) throw error
 
-    if (data.user) {
-      await supabase.from('users').insert({
-        id:              data.user.id,
-        email,
-        nome:            profileData.nome,
-        whatsapp:        profileData.whatsapp,
-        data_nascimento: profileData.data_nascimento,
-        estado_civil:    profileData.estado_civil,
-        endereco:        profileData.endereco,
-        subdepartamento: profileData.subdepartamento,
-        instrumento:     profileData.instrumento || [],
-        data_entrada:    profileData.data_entrada,
-        role:            'membro_observador',
-        ativo:           false,
-      })
-    }
-
-    // KEY FIX: Destroy the auto-created session immediately.
-    // signUp() creates a Supabase session automatically. We don't want
-    // unapproved users to be logged in — sign them out right away.
+    // Destroy the auto-created session immediately — unapproved users
+    // must not stay logged in. The DB trigger already created their row.
     await supabase.auth.signOut()
 
     return data

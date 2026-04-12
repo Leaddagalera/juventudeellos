@@ -24,7 +24,9 @@ export default function Reports() {
       .then(({ data }) => {
         setCiclos(data || [])
         if (data?.length > 0) setSelectedCiclo(data[0].id)
+        else setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
 
   useEffect(() => {

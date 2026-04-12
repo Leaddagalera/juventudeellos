@@ -193,10 +193,14 @@ export default function LiderGeralDashboard() {
 
   // Cycle day
   const cycleDay = ciclo
-    ? Math.floor((Date.now() - new Date(ciclo.inicio).getTime()) / (1000 * 60 * 60 * 24)) + 1
+    ? Math.floor((Date.now() - new Date(ciclo.inicio + 'T00:00:00').getTime()) / 86_400_000) + 1
     : null
-
-  const cycleProgress = cycleDay ? Math.min(100, Math.round((cycleDay / 45) * 100)) : 0
+  const cycleTotalDays = ciclo
+    ? Math.max(1, Math.round((new Date(ciclo.fim + 'T00:00:00') - new Date(ciclo.inicio + 'T00:00:00')) / 86_400_000))
+    : 45
+  const cycleProgress = cycleDay && cycleDay > 0
+    ? Math.min(100, Math.round((cycleDay / cycleTotalDays) * 100))
+    : 0
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
@@ -208,7 +212,7 @@ export default function LiderGeralDashboard() {
           </h2>
           {ciclo ? (
             <p className="text-sm text-[var(--color-text-3)]">
-              Ciclo ativo · Dia {cycleDay} de 45
+              Ciclo ativo · {cycleDay > 0 ? `Dia ${cycleDay} de ${cycleTotalDays}` : `Serviço em ${Math.abs(cycleDay - 1)}d`}
             </p>
           ) : (
             <p className="text-sm text-[var(--color-text-3)]">Nenhum ciclo ativo</p>

@@ -333,9 +333,16 @@ export default function DevModeManager() {
         alert('Nenhuma escalação foi gerada.\n\nIsso ocorre quando os membros que preencheram disponibilidade não pertencem a nenhum subdepartamento configurado.')
         return
       }
-      await supabase.from('escalas').delete().eq('ciclo_id', cycle.id)
+      // Fetch old IDs so we can delete them ONLY after a successful insert
+      const { data: oldRows } = await supabase.from('escalas').select('id').eq('ciclo_id', cycle.id)
+      const oldIds = (oldRows || []).map(r => r.id)
+      // Insert new rows first — if it fails, old data is still intact
       const { error } = await supabase.from('escalas').insert(rows)
       if (error) throw error
+      // Safe to delete old rows now
+      if (oldIds.length > 0) {
+        await supabase.from('escalas').delete().in('id', oldIds)
+      }
       await supabase.from('ciclos').update({ status: 'escala_publicada' }).eq('id', cycle.id)
       await loadCycles()
       setGenResult({ cicloId: cycle.id, count: rows.length })

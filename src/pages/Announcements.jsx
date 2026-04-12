@@ -30,13 +30,18 @@ export default function Announcements() {
 
   async function loadComunicados() {
     setLoading(true)
-    const { data } = await supabase
-      .from('comunicados')
-      .select('*, users(nome)')
-      .order('criado_em', { ascending: false })
-      .limit(50)
-    setComunicados(data || [])
-    setLoading(false)
+    try {
+      const { data } = await supabase
+        .from('comunicados')
+        .select('*, users(nome)')
+        .order('criado_em', { ascending: false })
+        .limit(50)
+      setComunicados(data || [])
+    } catch (err) {
+      console.error('[Announcements]', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleSend() {

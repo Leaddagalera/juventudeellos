@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Save, LogOut, Moon, Sun } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -179,14 +179,15 @@ export default function Profile() {
 function ServiceHistory({ userId }) {
   const [history, setHistory] = useState(null)
 
-  useState(() => {
+  useEffect(() => {
+    if (!userId) return
     supabase.from('escalas')
       .select('domingo, subdepartamento, status_confirmacao')
       .eq('user_id', userId)
       .order('domingo', { ascending: false })
       .limit(20)
       .then(({ data }) => setHistory(data || []))
-  })
+  }, [userId])
 
   if (!history) return null
 

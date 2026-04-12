@@ -93,7 +93,8 @@ export default function Schedule() {
   }
 
   async function updateStatus(escalaId, status) {
-    await supabase.from('escalas').update({ status_confirmacao: status }).eq('id', escalaId)
+    const { error } = await supabase.from('escalas').update({ status_confirmacao: status }).eq('id', escalaId)
+    if (error) { alert('Erro ao atualizar: ' + error.message); return }
     setEscalas(prev => prev.map(e => e.id === escalaId ? { ...e, status_confirmacao: status } : e))
   }
 
