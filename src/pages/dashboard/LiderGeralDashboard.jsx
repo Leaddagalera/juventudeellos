@@ -129,11 +129,15 @@ export default function LiderGeralDashboard() {
           .from('briefings').select('id')
           .eq('ciclo_id', activeCiclo?.id || '').eq('subdepartamento', subdep).limit(1)
 
+        // O louvor não preenche briefing próprio — quem preenche é a regência.
+        // Evita falso alerta de "Briefing não preenchido" para o subdep louvor.
+        const temBriefingProprio = subdep !== 'louvor'
+
         saudeObj[subdep] = {
           total:       escalasDep?.length || 0,
           escalados:   escalasDep?.length || 0,
           confirmados: escalasDep?.filter(e => e.status_confirmacao === 'confirmado').length || 0,
-          semBriefing: !briefingDep?.length,
+          semBriefing: temBriefingProprio && !briefingDep?.length,
           alertas:     escalasDep?.filter(e => e.status_confirmacao === 'pendente').length || 0,
         }
       }
