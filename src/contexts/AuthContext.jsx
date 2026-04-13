@@ -3,12 +3,33 @@ import { supabase } from '../lib/supabase.js'
 
 const AuthContext = createContext(null)
 
+// ── Cache de perfil em localStorage ──────────────────────────────────────────
+// Permite que o app abra instantaneamente ao retornar: exibe o perfil cacheado
+// imediatamente enquanto a sessão e o perfil atualizado chegam em segundo plano.
+const PROFILE_CACHE_KEY = 'ellos-profile-v1'
+
+function getCachedProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function setCachedProfile(data) {
+  try {
+    if (data) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data))
+    else localStorage.removeItem(PROFILE_CACHE_KEY)
+  } catch {}
+}
+
 export function AuthProvider({ children }) {
+  // Inicializa perfil com o cache — app abre sem spinner na volta
   const [session,          setSession]          = useState(null)
-  const [profile,          setProfile]          = useState(null)
+  const [profile,          setProfile]          = useState(() => getCachedProfile())
   const [loading,          setLoading]          = useState(true)
   const [profileLoading,   setProfileLoading]   = useState(false)
-  const [profileAttempted, setProfileAttempted] = useState(false)
+  // Se há cache, considera que já tentamos buscar o perfil (evita tela de loading)
+  const [profileAttempted, setProfileAttempted] = useState(() => !!getCachedProfile())
   const initializedRef = useRef(false)
 
   const [darkMode, setDarkMode] = useState(() => {
@@ -22,24 +43,25 @@ export function AuthProvider({ children }) {
     localStorage.setItem('ellos-dark', darkMode)
   }, [darkMode])
 
-  const fetchProfile = useCallback(async (userId) => {
-    setProfileLoading(true)
+  const fetchProfile = useCallback(async (userId, { silent = false } = {}) => {
+    if (!silent) setProfileLoading(true)
     try {
-      const { data, error } = await Promise.race([
-        supabase.from('users').select('*').eq('id', userId).single(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('profile-timeout')), 30000)
-        ),
-      ])
+      const { data, error } = await supabase
+        .from('users').select('*').eq('id', userId).single()
       if (error) throw error
       setProfile(data)
+      setCachedProfile(data)   // salva no cache para próxima abertura
       return data
     } catch (err) {
       console.warn('[Auth] Could not fetch profile:', err.message)
-      setProfile(null)
+      // Só limpa o perfil se não houver cache válido (evita tela de erro por rede ruim)
+      if (!getCachedProfile()) {
+        setProfile(null)
+        setCachedProfile(null)
+      }
       return null
     } finally {
-      setProfileLoading(false)
+      if (!silent) setProfileLoading(false)
       setProfileAttempted(true)
     }
   }, [])
@@ -49,13 +71,37 @@ export function AuthProvider({ children }) {
 
     async function init() {
       try {
+        const cached = getCachedProfile()
+
         const { data: { session } } = await supabase.auth.getSession()
         if (!mounted) return
+
         setSession(session)
-        if (session?.user) await fetchProfile(session.user.id)
+
+        if (!session?.user) {
+          // Sem sessão — limpa cache e perfil
+          if (cached) { setProfile(null); setCachedProfile(null) }
+          setLoading(false)
+          initializedRef.current = true
+          return
+        }
+
+        // Há sessão válida
+        if (cached) {
+          // Cache disponível → libera o loading imediatamente e busca em segundo plano
+          setLoading(false)
+          initializedRef.current = true
+          fetchProfile(session.user.id, { silent: true })
+        } else {
+          // Primeira abertura sem cache → aguarda busca normal
+          await fetchProfile(session.user.id)
+          if (mounted) {
+            setLoading(false)
+            initializedRef.current = true
+          }
+        }
       } catch (err) {
         console.warn('[Auth] init failed:', err)
-      } finally {
         if (mounted) {
           setLoading(false)
           initializedRef.current = true
@@ -156,14 +202,14 @@ export function AuthProvider({ children }) {
   }
 
   const signOut = () => {
-    // 1. Remove Supabase's stored token from localStorage immediately so the
-    //    next page load doesn't pick it up, even if the network call is slow.
+    // 1. Remove token e cache do localStorage imediatamente
     Object.keys(localStorage)
       .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
       .forEach(k => localStorage.removeItem(k))
-    // 2. Fire-and-forget server-side invalidation (don't block navigation).
+    setCachedProfile(null)
+    // 2. Fire-and-forget server-side invalidation
     supabase.auth.signOut().catch(() => {})
-    // 3. Clear React state and navigate away immediately.
+    // 3. Limpa estado React e navega imediatamente
     setSession(null)
     setProfile(null)
     setProfileAttempted(false)
