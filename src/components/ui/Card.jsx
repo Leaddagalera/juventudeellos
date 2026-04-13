@@ -115,16 +115,24 @@ export function Skeleton({ className }) {
   )
 }
 
-export function Avatar({ nome, size = 'md', className }) {
+export function Avatar({ nome, src, size = 'md', className }) {
   const sizes = { xs: 'w-6 h-6 text-2xs', sm: 'w-7 h-7 text-xs', md: 'w-8 h-8 text-xs', lg: 'w-10 h-10 text-sm', xl: 'w-12 h-12 text-base' }
   const inits = nome
     ? nome.trim().split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
     : '?'
+  const base = cn('rounded-full flex-shrink-0', sizes[size] || sizes.md, className)
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={nome || ''}
+        className={cn(base, 'object-cover bg-primary-100')}
+        onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex' }}
+      />
+    )
+  }
   return (
-    <div className={cn(
-      'rounded-full bg-primary-600 text-white flex items-center justify-center font-semibold flex-shrink-0',
-      sizes[size] || sizes.md, className
-    )}>
+    <div className={cn(base, 'bg-primary-600 text-white flex items-center justify-center font-semibold')}>
       {inits}
     </div>
   )

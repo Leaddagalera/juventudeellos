@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Search, Edit2, Trash2, ArrowUpCircle, Crown } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Search, Edit2, Trash2, ArrowUpCircle, Crown, Camera, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, Avatar, EmptyState, Skeleton, Th, Td, TableRow } from '../components/ui/Card.jsx'
@@ -32,20 +32,42 @@ const ROLE_OPTS_FALLBACK = [
 ]
 
 function EditMemberModal({ member, onClose, onSave, roleOpts }) {
-  const [form,    setForm]    = useState(member || {})
-  const [loading, setLoading] = useState(false)
+  const [form,         setForm]         = useState(member || {})
+  const [loading,      setLoading]      = useState(false)
+  const [photoLoading, setPhotoLoading] = useState(false)
+  const fileRef = useRef(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const isLiderFuncao = form.role === 'lider_funcao'
 
-  // Subdeps served = all selected subdeps (chip select)
   const subdepsServe = Array.isArray(form.subdepartamento)
     ? form.subdepartamento
     : form.subdepartamento ? [form.subdepartamento] : []
 
-  // Chips available for "serve em" = exclude the one they lead (to avoid confusion in display, but still allowed)
   const serveOpts = SUBDEP_CHIP_OPTS
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoLoading(true)
+    try {
+      const ext  = file.name.split('.').pop()
+      const path = `${form.id}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      // Append cache-buster so the browser refreshes the image
+      const url = `${data.publicUrl}?t=${Date.now()}`
+      set('foto_url', url)
+    } catch (err) {
+      alert('Erro ao enviar foto: ' + err.message)
+    } finally {
+      setPhotoLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     setLoading(true)
@@ -61,6 +83,7 @@ function EditMemberModal({ member, onClose, onSave, roleOpts }) {
         tarja:           form.tarja,
         tarja_atualizada_em: form.tarja !== member.tarja ? new Date().toISOString() : member.tarja_atualizada_em,
         ativo:           form.ativo,
+        foto_url:        form.foto_url ?? null,
       }).eq('id', form.id)
       if (error) throw error
       onSave()
@@ -86,6 +109,41 @@ function EditMemberModal({ member, onClose, onSave, roleOpts }) {
       }
     >
       <div className="space-y-3">
+
+        {/* ── Foto de perfil ── */}
+        <div className="flex flex-col items-center gap-2 pb-1">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handlePhotoChange}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={photoLoading}
+            className="relative group"
+            title="Alterar foto"
+          >
+            {/* Avatar ou foto atual */}
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-primary-600 flex items-center justify-center text-white text-2xl font-semibold flex-shrink-0">
+              {form.foto_url
+                ? <img src={form.foto_url} alt={form.nome} className="w-full h-full object-cover" />
+                : <span>{(form.nome || '?').trim().split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()}</span>
+              }
+            </div>
+            {/* Overlay */}
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {photoLoading
+                ? <Loader2 size={20} className="text-white animate-spin" />
+                : <Camera size={20} className="text-white" />
+              }
+            </div>
+          </button>
+          <p className="text-2xs text-[var(--color-text-3)]">Clique para alterar a foto</p>
+        </div>
+
         <Input label="Nome" value={form.nome || ''} onChange={e => set('nome', e.target.value)} />
         <Input label="WhatsApp" value={form.whatsapp || ''} onChange={e => set('whatsapp', e.target.value)} />
         <Select label="Perfil" value={form.role || ''} onChange={e => set('role', e.target.value)}>
@@ -237,7 +295,7 @@ export default function Members() {
             {pendentes.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Avatar nome={m.nome} size="sm" />
+                  <Avatar nome={m.nome} src={m.foto_url} size="sm" />
                   <div>
                     <p className="text-sm font-medium text-[var(--color-text-1)]">{m.nome}</p>
                     <p className="text-xs text-[var(--color-text-3)]">{m.email} · {subdepLabel(m.subdepartamento)}</p>
@@ -305,7 +363,7 @@ export default function Members() {
                     <TableRow key={m.id}>
                       <Td>
                         <div className="flex items-center gap-2">
-                          <Avatar nome={m.nome} size="sm" />
+                          <Avatar nome={m.nome} src={m.foto_url} size="sm" />
                           <div>
                             <p className="font-medium text-[var(--color-text-1)]">{m.nome}</p>
                             <p className="text-2xs text-[var(--color-text-3)]">{m.email}</p>
