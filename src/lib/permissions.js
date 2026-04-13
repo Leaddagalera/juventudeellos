@@ -80,7 +80,7 @@ export const DEFAULT_PERMISSIONS = {
     campos_visiveis: ['historico_servico', 'escala_propria'],
   },
   membro_observador: {
-    telas:           ['dashboard', 'escalas', 'briefings'],
+    telas:           ['escalas'],
     acoes:           [],
     campos_visiveis: ['escala_geral', 'briefing_completo'],
   },

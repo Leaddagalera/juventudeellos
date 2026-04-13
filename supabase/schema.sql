@@ -335,7 +335,7 @@ insert into public.perfis (nome, label, descricao, protegido, telas, acoes, camp
     array['historico_servico','escala_propria']
   ),
   ('membro_observador', 'Observador', 'Membro com acesso limitado', true,
-    array['dashboard','escalas','briefings'],
+    array['escalas'],
     array[]::text[],
     array['escala_geral','briefing_completo']
   )
