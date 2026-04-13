@@ -78,7 +78,7 @@ export function Layout() {
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-danger-500 animate-pulse-dot" />
               )}
             </button>
-            <Avatar nome={profile?.nome} size="sm" className="lg:hidden" />
+            <Avatar nome={profile?.nome} src={profile?.foto_url} size="sm" className="lg:hidden" />
           </div>
         </header>
 

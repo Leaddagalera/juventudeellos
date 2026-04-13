@@ -72,7 +72,7 @@ export function Sidebar({ onClose }) {
 
         {/* Profile row */}
         <NavLink to="/profile" onClick={onClose} className={({ isActive }) => cn('sidebar-link', isActive && 'active')}>
-          <Avatar nome={profile?.nome} size="sm" />
+          <Avatar nome={profile?.nome} src={profile?.foto_url} size="sm" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium truncate">{profile?.nome || 'Perfil'}</p>
             <p className="text-2xs text-[var(--color-text-3)] truncate">{profile?.role || ''}</p>
