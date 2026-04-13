@@ -55,25 +55,26 @@ export default function MembroDashboard() {
   async function loadData() {
     setLoading(true)
     try {
-      // Get active cycle
-      const { data: ciclos } = await supabase
-        .from('ciclos').select('*')
-        .in('status', ['escala_publicada', 'confirmacoes'])
-        .order('inicio', { ascending: false }).limit(1)
-      const ciclo = ciclos?.[0]
+      // Ciclo e escalas em paralelo (escalas não dependem do ciclo para buscar)
+      const [{ data: ciclos }, { data: myEscalas }] = await Promise.all([
+        supabase.from('ciclos').select('*')
+          .in('status', ['escala_publicada', 'confirmacoes'])
+          .order('inicio', { ascending: false }).limit(1),
+        supabase.from('escalas').select('*')
+          .eq('user_id', profile.id)
+          .order('domingo', { ascending: true }),
+      ])
 
+      const ciclo = ciclos?.[0]
       if (!ciclo) { setLoading(false); return }
 
-      // My escalas
-      const { data: myEscalas } = await supabase
-        .from('escalas').select('*')
-        .eq('ciclo_id', ciclo.id).eq('user_id', profile.id)
-        .order('domingo', { ascending: true })
-      setEscalas(myEscalas || [])
+      // Filtra as escalas do ciclo ativo
+      const escalasAtivas = (myEscalas || []).filter(e => e.ciclo_id === ciclo.id)
+      setEscalas(escalasAtivas)
 
-      // Next Sunday briefing
+      // Busca briefing do próximo culto (se houver)
       const today = new Date().toISOString().split('T')[0]
-      const nextEscala = (myEscalas || []).find(e => e.domingo >= today)
+      const nextEscala = escalasAtivas.find(e => e.domingo >= today)
       if (nextEscala) {
         const { data: bri } = await supabase
           .from('briefings').select('*')

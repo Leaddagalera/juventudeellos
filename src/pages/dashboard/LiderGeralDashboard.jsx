@@ -74,7 +74,7 @@ export default function LiderGeralDashboard() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Active cycle
+      // ── 1. Busca o ciclo ativo primeiro (necessário para as queries seguintes)
       const { data: ciclos } = await supabase
         .from('ciclos')
         .select('*')
@@ -84,32 +84,46 @@ export default function LiderGeralDashboard() {
       const activeCiclo = ciclos?.[0] || null
       setCiclo(activeCiclo)
 
-      // Members metrics
-      const { count: totalAtivos } = await supabase
-        .from('users').select('*', { count: 'exact', head: true })
-        .eq('ativo', true).eq('role', 'membro_serve')
+      // ── 2. Todas as queries independentes em paralelo (uma única rodada de rede)
+      const cicloId = activeCiclo?.id || ''
 
-      const { count: confirmados } = await supabase
-        .from('escalas').select('*', { count: 'exact', head: true })
-        .eq('status_confirmacao', 'confirmado')
-        .eq('ciclo_id', activeCiclo?.id || '')
+      const [
+        { count: totalAtivos },
+        { count: confirmados },
+        { count: pendMedia },
+        { count: pendCadastros },
+        { data: dispUsers },
+        { data: membros },
+        { data: tarjas },
+        { data: membrosAniv },
+        ...saudeResults
+      ] = await Promise.all([
+        // Métricas
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('ativo', true).eq('role', 'membro_serve'),
+        supabase.from('escalas').select('*', { count: 'exact', head: true }).eq('status_confirmacao', 'confirmado').eq('ciclo_id', cicloId),
+        supabase.from('conteudo_login').select('*', { count: 'exact', head: true }).eq('status', 'pendente'),
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('ativo', false),
+        // Disponibilidade
+        cicloId
+          ? supabase.from('disponibilidades').select('user_id').eq('ciclo_id', cicloId)
+          : Promise.resolve({ data: [] }),
+        supabase.from('users').select('id').eq('ativo', true).eq('role', 'membro_serve'),
+        // Alertas
+        supabase.from('users').select('nome, tarja, tarja_atualizada_em').eq('ativo', true).in('tarja', ['nicodemos', 'prodigo']),
+        // Aniversariantes
+        supabase.from('users').select('nome, data_nascimento').eq('ativo', true),
+        // Saúde dos subdeps — escalas e briefings em paralelo para cada subdep
+        ...managedSubdeps.flatMap(subdep => [
+          supabase.from('escalas').select('status_confirmacao, user_id').eq('ciclo_id', cicloId).eq('subdepartamento', subdep),
+          subdep !== 'louvor'
+            ? supabase.from('briefings').select('id').eq('ciclo_id', cicloId).eq('subdepartamento', subdep).limit(1)
+            : Promise.resolve({ data: [true] }), // louvor não tem briefing próprio → sempre "OK"
+        ]),
+      ])
 
-      // Members without availability (if in window)
-      let semDisp = 0
-      if (activeCiclo?.id) {
-        const { data: dispUsers } = await supabase
-          .from('disponibilidades').select('user_id').eq('ciclo_id', activeCiclo.id)
-        const { data: membros } = await supabase
-          .from('users').select('id').eq('ativo', true).eq('role', 'membro_serve')
-        const dispSet = new Set((dispUsers || []).map(d => d.user_id))
-        semDisp = (membros || []).filter(m => !dispSet.has(m.id)).length
-      }
-
-      // Pending alerts
-      const { count: pendMedia } = await supabase
-        .from('conteudo_login').select('*', { count: 'exact', head: true }).eq('status', 'pendente')
-      const { count: pendCadastros } = await supabase
-        .from('users').select('*', { count: 'exact', head: true }).eq('ativo', false)
+      // ── 3. Processa disponibilidade
+      const dispSet = new Set((dispUsers || []).map(d => d.user_id))
+      const semDisp = (membros || []).filter(m => !dispSet.has(m.id)).length
 
       setMetrics({
         ativos:      totalAtivos || 0,
@@ -118,59 +132,38 @@ export default function LiderGeralDashboard() {
         alertas:     (pendMedia || 0) + (pendCadastros || 0),
       })
 
-      // Build department health — apenas os subdeps gerenciados pelo usuário
+      // ── 4. Processa saúde dos subdeps (resultados vêm em pares: escalas, briefings)
       const saudeObj = {}
-      for (const subdep of managedSubdeps) {
-        const { data: escalasDep } = await supabase
-          .from('escalas').select('status_confirmacao, user_id')
-          .eq('ciclo_id', activeCiclo?.id || '').eq('subdepartamento', subdep)
-
-        const { data: briefingDep } = await supabase
-          .from('briefings').select('id')
-          .eq('ciclo_id', activeCiclo?.id || '').eq('subdepartamento', subdep).limit(1)
-
-        // O louvor não preenche briefing próprio — quem preenche é a regência.
-        // Evita falso alerta de "Briefing não preenchido" para o subdep louvor.
-        const temBriefingProprio = subdep !== 'louvor'
-
+      managedSubdeps.forEach((subdep, i) => {
+        const escalasDep  = saudeResults[i * 2]?.data || []
+        const briefingDep = saudeResults[i * 2 + 1]?.data || []
         saudeObj[subdep] = {
-          total:       escalasDep?.length || 0,
-          escalados:   escalasDep?.length || 0,
-          confirmados: escalasDep?.filter(e => e.status_confirmacao === 'confirmado').length || 0,
-          semBriefing: temBriefingProprio && !briefingDep?.length,
-          alertas:     escalasDep?.filter(e => e.status_confirmacao === 'pendente').length || 0,
+          total:       escalasDep.length,
+          escalados:   escalasDep.length,
+          confirmados: escalasDep.filter(e => e.status_confirmacao === 'confirmado').length,
+          semBriefing: subdep !== 'louvor' && !briefingDep.length,
+          alertas:     escalasDep.filter(e => e.status_confirmacao === 'pendente').length,
         }
-      }
+      })
       setSaude(saudeObj)
 
-      // Alerts list
+      // ── 5. Monta lista de alertas
       const alertList = []
-      if ((pendMedia || 0) > 0) alertList.push({ type: 'warning', msg: `${pendMedia} conteúdo(s) de mídia aguardando aprovação`, link: '/media' })
+      if ((pendMedia || 0) > 0)     alertList.push({ type: 'warning', msg: `${pendMedia} conteúdo(s) de mídia aguardando aprovação`, link: '/media' })
       if ((pendCadastros || 0) > 0) alertList.push({ type: 'warning', msg: `${pendCadastros} cadastro(s) pendentes de aprovação`, link: '/members' })
 
-      // Tarja negativa sem alteração há 30+ dias
-      const { data: tarjas } = await supabase
-        .from('users').select('nome, tarja, tarja_atualizada_em')
-        .eq('ativo', true).in('tarja', ['nicodemos', 'prodigo'])
       for (const t of (tarjas || [])) {
         if (daysSince(t.tarja_atualizada_em) >= 30) {
           alertList.push({ type: 'danger', msg: `${t.nome} — ${t.tarja === 'nicodemos' ? 'Nicodemos' : 'Filho Pródigo'} há ${daysSince(t.tarja_atualizada_em)} dias sem evolução`, link: '/members' })
         }
       }
 
-      // Escala engine available
       if (activeCiclo?.status === 'disponibilidade') {
-        const start = new Date(activeCiclo.inicio)
-        const now   = new Date()
-        const dia   = Math.floor((now - start) / (1000 * 60 * 60 * 24)) + 1
+        const dia = Math.floor((Date.now() - new Date(activeCiclo.inicio)) / 86_400_000) + 1
         if (dia >= 21) alertList.push({ type: 'info', msg: 'Dia 21+ — motor de escala disponível para execução', link: null, action: 'run_engine' })
       }
 
       setAlertas(alertList)
-
-      // Birthdays this week
-      const { data: membrosAniv } = await supabase
-        .from('users').select('nome, data_nascimento').eq('ativo', true)
       setAniverss((membrosAniv || []).filter(m => isBirthdayThisWeek(m.data_nascimento)))
 
     } catch (err) {
