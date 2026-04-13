@@ -91,17 +91,17 @@ function ProfileError({ onRetry, onSignOut }) {
 }
 
 function RequireAuth({ children }) {
-  const { session, profile, loading, profileLoading, profileAttempted, signOut, refreshProfile } = useAuth()
+  const { session, profile, loading, hydrating, profileLoading, profileAttempted, signOut, refreshProfile } = useAuth()
 
-  // Wait for initial auth check
+  // Primeira abertura sem cache — aguarda sessão e perfil
   if (loading) return <AppLoader />
-  // Not authenticated → login
-  if (!session) return <Navigate to="/login" replace />
-  // Profile fetch still in progress or not yet attempted → wait
+  // Sem sessão confirmada e sem hydrating (verificação em curso com cache) → login
+  if (!session && !hydrating) return <Navigate to="/login" replace />
+  // Perfil ainda não disponível → aguarda
   if (profileLoading || !profileAttempted) return <AppLoader />
-  // Profile failed to load — show recoverable error (network issue, cold start, etc.)
+  // Perfil falhou e não há cache → erro recuperável
   if (!profile) return <ProfileError onRetry={refreshProfile} onSignOut={signOut} />
-  // Account exists but not yet approved → block
+  // Cadastro pendente de aprovação
   if (profile.ativo === false) return <PendingApproval />
   return children
 }

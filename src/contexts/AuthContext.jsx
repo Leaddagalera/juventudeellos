@@ -4,8 +4,6 @@ import { supabase } from '../lib/supabase.js'
 const AuthContext = createContext(null)
 
 // ── Cache de perfil em localStorage ──────────────────────────────────────────
-// Permite que o app abra instantaneamente ao retornar: exibe o perfil cacheado
-// imediatamente enquanto a sessão e o perfil atualizado chegam em segundo plano.
 const PROFILE_CACHE_KEY = 'ellos-profile-v1'
 
 function getCachedProfile() {
@@ -23,14 +21,20 @@ function setCachedProfile(data) {
 }
 
 export function AuthProvider({ children }) {
-  // Inicializa perfil com o cache — app abre sem spinner na volta
+  const cached = getCachedProfile()
+
   const [session,          setSession]          = useState(null)
-  const [profile,          setProfile]          = useState(() => getCachedProfile())
-  const [loading,          setLoading]          = useState(true)
+  const [profile,          setProfile]          = useState(cached)
   const [profileLoading,   setProfileLoading]   = useState(false)
-  // Se há cache, considera que já tentamos buscar o perfil (evita tela de loading)
-  const [profileAttempted, setProfileAttempted] = useState(() => !!getCachedProfile())
+  const [profileAttempted, setProfileAttempted] = useState(!!cached)
   const initializedRef = useRef(false)
+
+  // loading: true apenas na primeira abertura sem cache (sem dados para mostrar)
+  const [loading,   setLoading]   = useState(!cached)
+
+  // hydrating: true enquanto a sessão está sendo verificada com cache disponível.
+  // Permite mostrar o conteúdo do cache sem redirecionar para login antes da resposta.
+  const [hydrating, setHydrating] = useState(!!cached)
 
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('ellos-dark')
@@ -50,11 +54,10 @@ export function AuthProvider({ children }) {
         .from('users').select('*').eq('id', userId).single()
       if (error) throw error
       setProfile(data)
-      setCachedProfile(data)   // salva no cache para próxima abertura
+      setCachedProfile(data)
       return data
     } catch (err) {
       console.warn('[Auth] Could not fetch profile:', err.message)
-      // Só limpa o perfil se não houver cache válido (evita tela de erro por rede ruim)
       if (!getCachedProfile()) {
         setProfile(null)
         setCachedProfile(null)
@@ -70,31 +73,71 @@ export function AuthProvider({ children }) {
     let mounted = true
 
     async function init() {
+      const hasCached = !!getCachedProfile()
+
       try {
-        const cached = getCachedProfile()
+        // Timeout de 8s em getSession para evitar travamento em rede ruim.
+        // Resolve com null no timeout em vez de rejeitar, para não cair no catch.
+        let sessionData = null
+        try {
+          const result = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise(resolve =>
+              setTimeout(() => resolve({ data: { session: null }, timedOut: true }), 8000)
+            ),
+          ])
 
-        const { data: { session } } = await supabase.auth.getSession()
+          if (result.timedOut) {
+            // Timeout: se há cache, mantém hydrating=true e espera onAuthStateChange.
+            // O Supabase vai retentar o refresh e emitir TOKEN_REFRESHED ou SIGNED_OUT.
+            if (!mounted) return
+            if (!hasCached) {
+              // Sem cache e sem sessão confirmada → redireciona para login
+              setLoading(false)
+              setHydrating(false)
+              initializedRef.current = true
+            }
+            // Com cache: mantém tudo como está, onAuthStateChange resolve
+            return
+          }
+
+          sessionData = result.data?.session
+        } catch (sessionErr) {
+          console.warn('[Auth] getSession error:', sessionErr.message)
+          if (mounted) {
+            setHydrating(false)
+            setLoading(false)
+            initializedRef.current = true
+          }
+          return
+        }
+
         if (!mounted) return
+        setSession(sessionData)
 
-        setSession(session)
-
-        if (!session?.user) {
-          // Sem sessão — limpa cache e perfil
-          if (cached) { setProfile(null); setCachedProfile(null) }
+        if (!sessionData?.user) {
+          // Sessão inválida ou expirada
+          if (hasCached) {
+            setProfile(null)
+            setCachedProfile(null)
+            setProfileAttempted(false)
+          }
+          setHydrating(false)
           setLoading(false)
           initializedRef.current = true
           return
         }
 
-        // Há sessão válida
-        if (cached) {
-          // Cache disponível → libera o loading imediatamente e busca em segundo plano
+        // Sessão válida
+        setHydrating(false)
+        if (hasCached) {
+          // Cache existe: UI já está visível, atualiza perfil silenciosamente
           setLoading(false)
           initializedRef.current = true
-          fetchProfile(session.user.id, { silent: true })
+          fetchProfile(sessionData.user.id, { silent: true })
         } else {
-          // Primeira abertura sem cache → aguarda busca normal
-          await fetchProfile(session.user.id)
+          // Primeira abertura sem cache
+          await fetchProfile(sessionData.user.id)
           if (mounted) {
             setLoading(false)
             initializedRef.current = true
@@ -103,6 +146,7 @@ export function AuthProvider({ children }) {
       } catch (err) {
         console.warn('[Auth] init failed:', err)
         if (mounted) {
+          setHydrating(false)
           setLoading(false)
           initializedRef.current = true
         }
@@ -117,32 +161,30 @@ export function AuthProvider({ children }) {
         if (event === 'INITIAL_SESSION') return
 
         if (event === 'SIGNED_OUT') {
-          // Verify the sign-out is real before clearing state.
-          // Background token refresh failures can emit a spurious SIGNED_OUT.
+          // Verifica se o sign-out é real (pode ser spurious do refresh falho)
           try {
             const { data } = await supabase.auth.getSession()
             if (!mounted) return
-            if (data.session) {
-              // Still have a valid session — the SIGNED_OUT was spurious, ignore it
-              return
-            }
-          } catch { /* ignore — treat as real sign-out */ }
+            if (data.session) return // Ainda há sessão válida — ignora
+          } catch { /* trata como sign-out real */ }
           setSession(null)
           setProfile(null)
+          setCachedProfile(null)
           setProfileAttempted(false)
+          setHydrating(false)
           return
         }
 
         if (event === 'TOKEN_REFRESHED') {
-          // Token silently refreshed — only update the session object, never re-fetch
-          // the profile (it hasn't changed) and never reset profileAttempted (would
-          // cause a loading flash while the profile re-fetches).
+          // Token renovado silenciosamente — atualiza sessão e encerra hydrating
           setSession(newSession)
+          setHydrating(false)
           return
         }
 
-        // SIGNED_IN, USER_UPDATED, etc. — fetch fresh profile
+        // SIGNED_IN, USER_UPDATED, etc.
         setSession(newSession)
+        setHydrating(false)
         if (newSession?.user) {
           setProfileAttempted(false)
           await fetchProfile(newSession.user.id)
@@ -159,8 +201,6 @@ export function AuthProvider({ children }) {
   const signIn = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-
-    // Block unapproved users at login — never let them establish a real session
     if (data.user) {
       const { data: userRow } = await supabase
         .from('users').select('ativo').eq('id', data.user.id).single()
@@ -169,14 +209,10 @@ export function AuthProvider({ children }) {
         throw new Error('PENDING_APPROVAL')
       }
     }
-
     return data
   }
 
   const signUp = async (email, password, profileData) => {
-    // Pass all profile data via metadata so the DB trigger can create
-    // the public.users row even when email confirmation is enabled
-    // (in that case there's no active session, so client-side INSERT would fail RLS).
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: {
@@ -193,26 +229,20 @@ export function AuthProvider({ children }) {
       }
     })
     if (error) throw error
-
-    // Destroy the auto-created session immediately — unapproved users
-    // must not stay logged in. The DB trigger already created their row.
     await supabase.auth.signOut()
-
     return data
   }
 
   const signOut = () => {
-    // 1. Remove token e cache do localStorage imediatamente
     Object.keys(localStorage)
       .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
       .forEach(k => localStorage.removeItem(k))
     setCachedProfile(null)
-    // 2. Fire-and-forget server-side invalidation
     supabase.auth.signOut().catch(() => {})
-    // 3. Limpa estado React e navega imediatamente
     setSession(null)
     setProfile(null)
     setProfileAttempted(false)
+    setHydrating(false)
     window.location.href = '/login'
   }
 
@@ -224,6 +254,7 @@ export function AuthProvider({ children }) {
     session,
     profile,
     loading,
+    hydrating,
     profileLoading,
     profileAttempted,
     darkMode,
