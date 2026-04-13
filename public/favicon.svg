@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fundo azul escuro -->
+  <rect width="512" height="512" rx="112" fill="#0F2A4A"/>
+  <!-- Chama centralizada (viewBox original 0 0 78 100, escalonada para ~220x280, centrada em 256,256) -->
+  <g transform="translate(146, 116) scale(2.82)">
+    <!-- Chama principal -->
+    <path d="M38 98C18 98 4 82 4 64C4 50 10 40 18 32C16 42 20 50 28 54C24 44 26 30 34 18C36 30 40 38 38 50C44 42 46 30 42 18C54 30 60 46 56 62C62 56 64 46 60 34C70 46 74 60 72 76C68 90 54 98 38 98Z" fill="white"/>
+    <!-- Chama interna -->
+    <path d="M50 96C44 96 38 90 38 82C38 74 42 68 48 64C46 70 48 76 52 78C50 70 52 60 58 52C60 62 60 72 56 80C60 76 62 70 60 62C66 68 68 78 64 86C62 92 56 96 50 96Z" fill="#0F2A4A" opacity="0.35"/>
+  </g>
+</svg>
