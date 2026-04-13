@@ -29,20 +29,45 @@ function toDateStr(y, m, d) {
 
 // ── Briefing content extractor ─────────────────────────────────────────────
 
-function briefContent(subdep, dados) {
+// Determina o tema do culto pelo número do domingo no mês
+function sundayTheme(dateStr) {
+  const date = new Date(dateStr + 'T12:00:00')
+  let count = 0
+  const d = new Date(date.getFullYear(), date.getMonth(), 1)
+  while (d <= date) {
+    if (d.getDay() === 0) count++
+    d.setDate(d.getDate() + 1)
+  }
+  const themes = ['Santa Ceia', 'Louvor e Adoração', 'Missões', 'Louvor e Adoração', 'Livre']
+  return themes[count - 1] || 'Livre'
+}
+
+function briefContent(subdep, dados, domingo) {
   if (!dados) return []
   const lines = []
+  // Tema do culto para todos os subdeps
+  const tema = domingo ? sundayTheme(domingo) : dados.tema_culto
+  if (tema) lines.push({ label: 'Culto', value: tema })
+
   if (subdep === 'regencia') {
-    if (dados.tema_culto) lines.push({ label: 'Tema', value: dados.tema_culto })
-    if (dados.titulo)     lines.push({ label: 'Título', value: dados.titulo })
     if (dados.hinos)      lines.push({ label: 'Hinos', value: dados.hinos })
+    if (dados.tom)        lines.push({ label: 'Tom', value: dados.tom })
+    if (dados.instrumentos_necessarios?.length > 0)
+      lines.push({ label: 'Instrumentos', value: dados.instrumentos_necessarios.join(', ') })
     if (dados.observacoes) lines.push({ label: 'Obs', value: dados.observacoes })
   } else if (subdep === 'ebd') {
     if (dados.licao)      lines.push({ label: 'Lição', value: `${dados.licao}` })
     if (dados.titulo)     lines.push({ label: 'Título', value: dados.titulo })
     if (dados.texto_base) lines.push({ label: 'Base', value: dados.texto_base })
     if (dados.observacoes) lines.push({ label: 'Obs', value: dados.observacoes })
-  } else if (subdep === 'recepcao' || subdep === 'midia') {
+  } else if (subdep === 'recepcao') {
+    if (dados.postos)     lines.push({ label: 'Postos', value: dados.postos })
+    if (dados.quantidade) lines.push({ label: 'Qtd. pessoas', value: `${dados.quantidade}` })
+    if (dados.observacoes) lines.push({ label: 'Obs', value: dados.observacoes })
+  } else if (subdep === 'midia') {
+    if (dados.tema)       lines.push({ label: 'Tema visual', value: dados.tema })
+    if (dados.links)      lines.push({ label: 'Links', value: dados.links })
+    if (dados.metas)      lines.push({ label: 'Metas', value: dados.metas })
     if (dados.observacoes) lines.push({ label: 'Obs', value: dados.observacoes })
   }
   return lines
@@ -357,7 +382,7 @@ export default function Availability() {
                 const key  = `${selectedDay}:${subdep}`
                 const disp = disponibilis[key]
                 const bri  = briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep)
-                const lines = briefContent(subdep, bri?.dados_json)
+                const lines = briefContent(subdep, bri?.dados_json, selectedDay)
 
                 return (
                   <div key={subdep} className="rounded-xl border border-[var(--color-border)] overflow-hidden">
@@ -374,11 +399,11 @@ export default function Availability() {
                     <div className="px-3 py-3 space-y-3">
                       {/* Briefing content */}
                       {lines.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className="rounded-lg bg-[var(--color-bg-2)] border border-[var(--color-border)] px-3 py-2.5 space-y-1.5">
                           {lines.map(({ label, value }) => (
                             <div key={label} className="flex gap-2 text-xs">
-                              <span className="text-[var(--color-text-3)] w-10 flex-shrink-0">{label}</span>
-                              <span className="text-[var(--color-text-2)] leading-relaxed">{value}</span>
+                              <span className="text-[var(--color-text-3)] min-w-[5rem] flex-shrink-0 font-medium">{label}</span>
+                              <span className="text-[var(--color-text-1)] leading-relaxed">{value}</span>
                             </div>
                           ))}
                         </div>
