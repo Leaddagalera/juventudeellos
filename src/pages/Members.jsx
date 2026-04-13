@@ -320,7 +320,9 @@ export default function Members() {
                 </div>
                 <div className="flex gap-1.5">
                   <Button size="xs" variant="success" onClick={() => approveUser(m.id)}>Aprovar</Button>
-                  <Button size="xs" variant="danger" onClick={() => setDelMember(m)}>Recusar</Button>
+                  {m.role !== 'lider_geral' && (
+                    <Button size="xs" variant="danger" onClick={() => setDelMember(m)}>Recusar</Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -441,13 +443,15 @@ export default function Members() {
                                 <ArrowUpCircle size={13} />
                               </button>
                             )}
-                            <button
-                              onClick={() => setDelMember(m)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-3)] hover:bg-[var(--color-bg-2)] hover:text-danger-500 transition-colors"
-                              title="Excluir"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {m.role !== 'lider_geral' && (
+                              <button
+                                onClick={() => setDelMember(m)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-3)] hover:bg-[var(--color-bg-2)] hover:text-danger-500 transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         </Td>
                       )}
