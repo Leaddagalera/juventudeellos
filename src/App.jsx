@@ -33,6 +33,7 @@ class ErrorBoundary extends Component {
 }
 
 // Pages
+import { InstallPrompt } from './components/ui/InstallPrompt.jsx'
 import Login      from './pages/Login.jsx'
 import Register   from './pages/Register.jsx'
 import LiderGeralDashboard from './pages/dashboard/LiderGeralDashboard.jsx'
@@ -168,6 +169,9 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+
+        {/* Solicitação de instalação PWA (mobile only) */}
+        <InstallPrompt />
       </BrowserRouter>
     </AuthProvider>
     </ErrorBoundary>
