@@ -121,18 +121,29 @@ export function Avatar({ nome, src, size = 'md', className }) {
     ? nome.trim().split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
     : '?'
   const base = cn('rounded-full flex-shrink-0', sizes[size] || sizes.md, className)
+  const fallback = cn(base, 'bg-primary-600 text-white flex items-center justify-center font-semibold')
+
   if (src) {
     return (
-      <img
-        src={src}
-        alt={nome || ''}
-        className={cn(base, 'object-cover bg-primary-100')}
-        onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex' }}
-      />
+      <span className={cn('relative inline-flex flex-shrink-0', sizes[size] || sizes.md, className)}>
+        <img
+          src={src}
+          alt={nome || ''}
+          className="w-full h-full rounded-full object-cover bg-primary-100"
+          onError={e => {
+            e.currentTarget.style.display = 'none'
+            e.currentTarget.nextSibling.style.display = 'flex'
+          }}
+        />
+        <span className={cn('w-full h-full rounded-full bg-primary-600 text-white items-center justify-center font-semibold hidden absolute inset-0')}>
+          {inits}
+        </span>
+      </span>
     )
   }
+
   return (
-    <div className={cn(base, 'bg-primary-600 text-white flex items-center justify-center font-semibold')}>
+    <div className={fallback}>
       {inits}
     </div>
   )
