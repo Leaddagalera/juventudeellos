@@ -69,9 +69,26 @@ function EditMemberModal({ member, onClose, onSave, roleOpts }) {
     }
   }
 
+  const LIMITE_LIDER_GERAL = 2
+
   const handleSave = async () => {
     setLoading(true)
     try {
+      // Verifica limite de Líderes Gerais antes de salvar
+      const promovendoParaLiderGeral = form.role === 'lider_geral' && member.role !== 'lider_geral'
+      if (promovendoParaLiderGeral) {
+        const { count } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('role', 'lider_geral')
+          .eq('ativo', true)
+        if ((count || 0) >= LIMITE_LIDER_GERAL) {
+          alert(`Limite atingido: só pode haver ${LIMITE_LIDER_GERAL} Líderes Gerais. Remova um antes de promover outro.`)
+          setLoading(false)
+          return
+        }
+      }
+
       const { error } = await supabase.from('users').update({
         nome:            form.nome,
         whatsapp:        form.whatsapp,
