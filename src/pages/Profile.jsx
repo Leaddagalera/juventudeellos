@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Save, LogOut, Moon, Sun } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Save, LogOut, Moon, Sun, Camera, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, CardSection, Avatar } from '../components/ui/Card.jsx'
@@ -29,10 +29,34 @@ export default function Profile() {
     estado_civil:   profile?.estado_civil || '',
     tarja:          profile?.tarja || '',
   })
-  const [saving,  setSaving]  = useState(false)
-  const [saved,   setSaved]   = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [saved,       setSaved]       = useState(false)
+  const [photoLoading, setPhotoLoading] = useState(false)
+  const fileRef = useRef(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoLoading(true)
+    try {
+      const ext  = file.name.split('.').pop()
+      const path = `${profile.id}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      const url = `${data.publicUrl}?t=${Date.now()}`
+      await supabase.from('users').update({ foto_url: url }).eq('id', profile.id)
+      refreshProfile()
+    } catch (err) {
+      alert('Erro ao enviar foto: ' + err.message)
+    } finally {
+      setPhotoLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -68,7 +92,35 @@ export default function Profile() {
       {/* Avatar + name */}
       <Card>
         <div className="flex items-center gap-4">
-          <Avatar nome={profile.nome} size="xl" />
+          {/* Foto clicável */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handlePhotoChange}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={photoLoading}
+            className="relative group flex-shrink-0"
+            title="Alterar foto de perfil"
+          >
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-primary-600 flex items-center justify-center text-white text-xl font-semibold">
+              {profile.foto_url
+                ? <img src={profile.foto_url} alt={profile.nome} className="w-full h-full object-cover" />
+                : <span>{(profile.nome || '?').trim().split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()}</span>
+              }
+            </div>
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {photoLoading
+                ? <Loader2 size={18} className="text-white animate-spin" />
+                : <Camera size={18} className="text-white" />
+              }
+            </div>
+          </button>
+
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text-1)]">{profile.nome}</h2>
             <p className="text-xs text-[var(--color-text-3)] mb-2">{profile.email}</p>
