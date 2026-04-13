@@ -164,31 +164,76 @@ export function invalidatePermissionsCache(role) {
   }
 }
 
+// ── Regras automáticas por subdepartamento ────────────────────────────────────
+//
+// Independentemente do perfil (role), certos subdepartamentos concedem
+// permissões extras automaticamente. Assim não é preciso criar um perfil
+// separado nem alterar cada membro manualmente.
+//
+const SUBDEP_EXTRA_PERMISSIONS = {
+  recepcao: {
+    telas:           ['visitantes'],
+    acoes:           ['registrar_visitante'],
+    campos_visiveis: ['dados_visitantes'],
+  },
+}
+
+/**
+ * Mescla as permissões do perfil com as extras concedidas pelos
+ * subdepartamentos do usuário, sem duplicatas.
+ */
+function applySubdepRules(perms, subdepartamento) {
+  const subdeps = Array.isArray(subdepartamento)
+    ? subdepartamento
+    : subdepartamento ? [subdepartamento] : []
+
+  let telas           = [...(perms.telas           || [])]
+  let acoes           = [...(perms.acoes           || [])]
+  let campos_visiveis = [...(perms.campos_visiveis || [])]
+
+  for (const subdep of subdeps) {
+    const extra = SUBDEP_EXTRA_PERMISSIONS[subdep]
+    if (!extra) continue
+    for (const t of extra.telas           || []) if (!telas.includes(t))           telas.push(t)
+    for (const a of extra.acoes           || []) if (!acoes.includes(a))           acoes.push(a)
+    for (const c of extra.campos_visiveis || []) if (!campos_visiveis.includes(c)) campos_visiveis.push(c)
+  }
+
+  return { ...perms, telas, acoes, campos_visiveis }
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function usePermissions() {
   const { profile } = useAuth()
-  const role = profile?.role
+  const role         = profile?.role
+  const subdep       = profile?.subdepartamento
   const fallback = DEFAULT_PERMISSIONS[role] || { telas: [], acoes: [], campos_visiveis: [] }
 
-  const [perms,  setPerms]  = useState(fallback)
+  const [perms,  setPerms]  = useState(() => applySubdepRules(fallback, subdep))
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     if (!role) return
     let cancelled = false
-    setPerms(DEFAULT_PERMISSIONS[role] || { telas: [], acoes: [], campos_visiveis: [] })
+    setPerms(applySubdepRules(
+      DEFAULT_PERMISSIONS[role] || { telas: [], acoes: [], campos_visiveis: [] },
+      subdep,
+    ))
     setLoaded(false)
 
     Promise.all([
       getPerfilPermissions(role),
       loadProfileLabels(),
     ]).then(([p]) => {
-      if (!cancelled) { setPerms(p); setLoaded(true) }
+      if (!cancelled) {
+        setPerms(applySubdepRules(p, subdep))
+        setLoaded(true)
+      }
     })
 
     return () => { cancelled = true }
-  }, [role])
+  }, [role, subdep])
 
   return {
     /** Can the current user perform this action? */
