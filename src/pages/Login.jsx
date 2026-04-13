@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Music, Eye, EyeOff, Clock } from 'lucide-react'
+import { Eye, EyeOff, Clock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { supabase } from '../lib/supabase.js'
+import { EllosLogo } from '../components/ui/Logo.jsx'
 
 // Fallback when no approved media exists
 const FALLBACK_SLIDES = [
@@ -199,23 +200,8 @@ export default function Login() {
       }}>
 
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(255,255,255,0.15)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Music size={18} color="white" />
-          </div>
-          <div>
-            <p style={{ color: 'white', fontWeight: 600, fontSize: 16, margin: 0, lineHeight: 1.2 }}>
-              Ellos Juventude
-            </p>
-            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, margin: 0 }}>
-              Assembleia de Deus
-            </p>
-          </div>
+        <div style={{ marginBottom: 20 }}>
+          <EllosLogo size={52} color="white" textColor="white" />
         </div>
 
         {/* Slide caption */}

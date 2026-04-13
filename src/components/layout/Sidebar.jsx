@@ -2,12 +2,13 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Calendar, ClipboardList,
   CheckSquare, UserPlus, BarChart2, Image, Bell,
-  LogOut, Moon, Sun, Music, ChevronRight, Settings2,
+  LogOut, Moon, Sun, ChevronRight, Settings2,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { usePermissions } from '../../lib/permissions.js'
 import { cn } from '../../lib/utils.js'
 import { Avatar } from '../ui/Card.jsx'
+import { FlameLogo } from '../ui/Logo.jsx'
 
 // All possible nav items, tagged by the screen ID in the `perfis` table
 const ALL_LINKS = [
@@ -33,13 +34,11 @@ export function Sidebar({ onClose }) {
     <aside className="flex flex-col h-full w-60 bg-[var(--color-surface)] border-r border-[var(--color-border)]">
       {/* Header */}
       <div className="topbar-gradient px-4 py-4 flex-shrink-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
-            <Music size={14} className="text-white" />
-          </div>
+        <div className="flex items-center gap-2.5 mb-0.5">
+          <FlameLogo size={28} color="white" />
           <span className="text-white font-semibold text-sm">Ellos Juventude</span>
         </div>
-        <p className="text-[#9BB5D0] text-2xs pl-9">Assembleia de Deus</p>
+        <p className="text-[#9BB5D0] text-2xs pl-10">Assembleia de Deus</p>
       </div>
 
       {/* Nav */}
