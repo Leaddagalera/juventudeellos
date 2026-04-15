@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/Badge.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { subdepLabel } from '../lib/utils.js'
 import { useSysConfig } from '../lib/sysConfig.js'
-import { isSecondSundayOfMonth } from '../lib/scheduleEngine.js'
+import { isEnsaioSunday } from '../lib/scheduleEngine.js'
 
 const INSTRUMENT_OPTS = [
   { value: 'violao',   label: 'Violão' },
@@ -478,6 +478,7 @@ export default function Briefing() {
       })
 
   const isRegente = mySubdeps.includes('regencia')
+  const ensaioWeek = sysConfig?.ensaio_week ?? 2
 
   const [ciclo,        setCiclo]        = useState(null)
   const [domingos,     setDomingos]     = useState([])
@@ -589,7 +590,7 @@ export default function Briefing() {
   }
 
   // Domingos de ensaio dentro do ciclo (2º domingo do mês)
-  const ensaioDomingos = domingos.filter(d => isSecondSundayOfMonth(d))
+  const ensaioDomingos = domingos.filter(d => isEnsaioSunday(d, ensaioWeek))
 
   // Aba Ensaio visível para quem tem acesso a regência
   const showEnsaioTab = isLiderGeral || mySubdeps.includes('regencia') || profile?.subdep_lider === 'regencia'
@@ -718,7 +719,7 @@ export default function Briefing() {
               <tbody>
                 {domingos.map((domingo, idx) => {
                   const tema = sundayTheme(domingo)
-                  const isEnsaio = isSecondSundayOfMonth(domingo)
+                  const isEnsaio = isEnsaioSunday(domingo, ensaioWeek)
                   return (
                     <tr key={domingo} className={`border-b border-[var(--color-border)] last:border-0 ${idx % 2 !== 0 ? 'bg-[var(--color-bg-2)]/40' : ''}`}>
                       <td className="px-4 py-3">

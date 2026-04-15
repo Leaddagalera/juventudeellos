@@ -4,6 +4,7 @@
  */
 import { supabase } from './supabase.js'
 import { parseISO, getDate, differenceInDays } from 'date-fns'
+import { getSysConfig } from './sysConfig.js'
 
 // Número padrão de membros por subdepartamento por domingo
 const DEFAULT_SLOTS = {
@@ -29,11 +30,10 @@ function getSundaysBetween(startStr, endStr) {
   return sundays
 }
 
-export function isSecondSundayOfMonth(dateStr) {
+export function isEnsaioSunday(dateStr, ensaioWeek = 2) {
   const d = parseISO(dateStr)
-  // Day of month divided by 7, floored = which week (1-indexed)
   const weekNum = Math.ceil(getDate(d) / 7)
-  return weekNum === 2
+  return weekNum === ensaioWeek
 }
 
 function lastServiceDate(userId, historico) {
@@ -74,6 +74,10 @@ function sortByPriority(pool, historico, subdep) {
 
 export async function runScheduleEngine(cicloId) {
   const alertas = []
+
+  // 0. Load system config
+  const sysConfig = await getSysConfig()
+  const ensaioWeek = sysConfig.ensaio_week ?? 2
 
   // 1. Load cycle
   const { data: ciclo, error: cicloErr } = await supabase
@@ -134,8 +138,8 @@ export async function runScheduleEngine(cicloId) {
   for (const domingo of domingos) {
     sundaysCovered[domingo] = {}
 
-    // ── Regência: 2nd Sunday is rehearsal (no full schedule)
-    const ensaioRegencia = isSecondSundayOfMonth(domingo)
+    // ── Regência: ensaio Sunday is rehearsal (configurable week)
+    const ensaioRegencia = isEnsaioSunday(domingo, ensaioWeek)
 
     for (const subdep of ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']) {
       // Regência rehearsal Sunday: skip non-regência
