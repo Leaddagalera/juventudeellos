@@ -99,11 +99,16 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
   useEffect(() => {
     if (open) {
       const base = briefing?.dados_json || {}
-      // Auto-preenche tema se ainda não tiver
-      setForm({ tema_culto: tema, ...base })
+      // Auto-preenche defaults por subdep
+      const defaults = { tema_culto: tema }
+      if (subdep === 'midia') {
+        defaults.tema = tema
+        defaults.metas = '10 minutos de vídeo útil + 10 fotos boas para carrossel'
+      }
+      setForm({ ...defaults, ...base })
       setSaved(false)
     }
-  }, [open, briefing, tema])
+  }, [open, briefing, tema, subdep])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
