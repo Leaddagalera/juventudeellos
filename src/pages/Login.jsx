@@ -200,8 +200,8 @@ export default function Login() {
       }}>
 
         {/* Logo */}
-        <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'flex-start' }}>
-          <EllosLogo height={80} style={{ filter: 'brightness(0) invert(1) drop-shadow(0 2px 16px rgba(0,0,0,0.5))' }} />
+        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
+          <EllosLogo height={240} style={{ filter: 'brightness(0) invert(1) drop-shadow(0 2px 16px rgba(0,0,0,0.5))' }} />
         </div>
 
         {/* Slide caption */}
