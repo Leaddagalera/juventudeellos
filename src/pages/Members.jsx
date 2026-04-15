@@ -291,6 +291,11 @@ export default function Members() {
 
   async function approveUser(id) {
     await supabase.from('users').update({ ativo: true }).eq('id', id)
+    // Notify member their account was approved
+    const member = pendentes.find(m => m.id === id)
+    if (member?.whatsapp) {
+      await notify.membroAprovado(member.whatsapp, member.nome).catch(() => {})
+    }
     loadMembers()
   }
 

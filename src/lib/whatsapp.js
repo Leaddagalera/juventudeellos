@@ -68,6 +68,15 @@ export const DEFAULT_MESSAGES = {
 
   midiaPendente:
     '🖼️ *Conteúdo de mídia aguardando aprovação*\n\n"{descricao}" enviado por *{enviado_por}*.\nAprove no painel: {app_url}',
+
+  membroAprovado:
+    '✅ Olá, *{nome}*! Seu cadastro na Juventude Ellos foi aprovado.\n\nBem-vindo(a)! Acesse agora: {app_url}',
+
+  cicloFaseAgradecimento:
+    '🙏 Obrigado, *{nome}*! Todos os {tipo} do ciclo estão preenchidos.\n\nVocê pode acompanhar tudo pelo sistema: {app_url}',
+
+  cicloFasePendencia:
+    '⚠️ *{nome}*, ainda há *{tipo}* pendente(s) para o ciclo.\n\nO ciclo só avançará após a resolução. Acesse agora: {app_url}',
 }
 
 export const DEFAULT_AUTOMATIONS = {
@@ -90,6 +99,9 @@ export const DEFAULT_AUTOMATIONS = {
   aniversario:              true,
   novoCadastroPendente:     true,
   midiaPendente:            true,
+  membroAprovado:           true,
+  cicloFaseAgradecimento:   true,
+  cicloFasePendencia:       true,
 }
 
 export const DEFAULT_CONDITIONS = {
@@ -232,4 +244,13 @@ export const notify = {
 
   midiaPendente: (phone, descricao, enviado_por) =>
     sendTemplate('midiaPendente', phone, { descricao, enviado_por }),
+
+  membroAprovado: (phone, nome) =>
+    sendTemplate('membroAprovado', phone, { nome }),
+
+  cicloFaseAgradecimento: (phone, nome, tipo) =>
+    sendTemplate('cicloFaseAgradecimento', phone, { nome, tipo }),
+
+  cicloFasePendencia: (phone, nome, tipo) =>
+    sendTemplate('cicloFasePendencia', phone, { nome, tipo }),
 }

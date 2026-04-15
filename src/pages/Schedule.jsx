@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { Select, Textarea } from '../components/ui/Input.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { formatDomingo, subdepLabel } from '../lib/utils.js'
+import { notify } from '../lib/whatsapp.js'
 
 const SUBDEPS_ALL = ['louvor','regencia','ebd','recepcao','midia']
 
@@ -129,6 +130,20 @@ export default function Schedule() {
         .eq('id', troca.id)
       if (error) throw error
       setTrocas(prev => prev.filter(t => t.id !== troca.id))
+
+      // Notify the person who requested the swap
+      const { data: solicitante } = await supabase
+        .from('users').select('nome, whatsapp').eq('id', troca.escalas?.user_id).single()
+      const domingo = troca.escalas?.domingo
+        ? new Date(troca.escalas.domingo + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })
+        : '—'
+      if (solicitante?.whatsapp) {
+        if (decision === 'aprovado') {
+          await notify.trocaAprovada(solicitante.whatsapp, solicitante.nome, domingo).catch(() => {})
+        } else {
+          await notify.trocaRecusada(solicitante.whatsapp, solicitante.nome, domingo, '').catch(() => {})
+        }
+      }
     } catch (err) {
       alert('Erro: ' + err.message)
     } finally {
@@ -148,6 +163,19 @@ export default function Schedule() {
       })
       setTrocaModal(false)
       setTrocaMotivo('')
+
+      // Notify Líder Geral about the swap request
+      const { data: lideres } = await supabase
+        .from('users').select('whatsapp')
+        .eq('role', 'lider_geral').eq('ativo', true)
+      const domingo = trocaEscala.domingo
+        ? new Date(trocaEscala.domingo + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })
+        : '—'
+      for (const l of (lideres || [])) {
+        if (l.whatsapp) {
+          await notify.trocaSolicitada(l.whatsapp, profile.nome, domingo, trocaMotivo).catch(() => {})
+        }
+      }
     } finally {
       setTrocaSending(false)
     }

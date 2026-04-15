@@ -23,7 +23,8 @@ import { Input } from '../ui/Input.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { Modal } from '../ui/Modal.jsx'
 import { SYS_DEFAULTS, getSysConfig, invalidateSysConfig } from '../../lib/sysConfig.js'
-import { cn } from '../../lib/utils.js'
+import { cn, subdepLabel } from '../../lib/utils.js'
+import { notify } from '../../lib/whatsapp.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,20 @@ function cycleDayInfo(inicio, fim) {
   const elapsed = Math.floor((now - startMs) / 86_400_000) + 1
   const pct     = Math.min(100, Math.round((elapsed / totalDays) * 100))
   return { future: false, elapsed, totalDays, pct }
+}
+
+// ── Cycle Sunday helper ───────────────────────────────────────────────────────
+
+function getSundaysInCiclo(ciclo) {
+  const sundays = []
+  const d = new Date(ciclo.inicio + 'T00:00:00')
+  const end = new Date(ciclo.fim + 'T00:00:00')
+  while (d.getDay() !== 0) d.setDate(d.getDate() + 1)
+  while (d <= end) {
+    sundays.push(d.toISOString().split('T')[0])
+    d.setDate(d.getDate() + 7)
+  }
+  return sundays
 }
 
 // ── Cycle status badge ────────────────────────────────────────────────────────
@@ -178,6 +193,127 @@ export default function DevModeManager() {
   const [cfgSaving,   setCfgSaving]   = useState(false)
   const [cfgSaved,    setCfgSaved]    = useState(false)
 
+  // ── WhatsApp notifications per cycle phase ────────────────────────────────
+
+  async function notificarCiclo(cicloId, novoStatus, ciclo) {
+    try {
+      switch (novoStatus) {
+
+        case 'briefing_regente': {
+          const { data: users } = await supabase
+            .from('users').select('nome, whatsapp')
+            .eq('ativo', true).eq('role', 'lider_funcao').eq('subdep_lider', 'regencia')
+          const prazo = new Date(Date.now() + 3 * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          for (const u of (users || [])) {
+            if (u.whatsapp) await notify.briefingRegentesAberto(u.whatsapp, u.nome, prazo).catch(() => {})
+          }
+          break
+        }
+
+        case 'briefing_lider': {
+          const sundays = getSundaysInCiclo(ciclo)
+          const { data: briefingsRegencia } = await supabase
+            .from('briefings').select('domingo')
+            .eq('ciclo_id', cicloId).eq('subdepartamento', 'regencia')
+          const filled = new Set((briefingsRegencia || []).map(b => b.domingo))
+          const pending = sundays.filter(s => !filled.has(s))
+
+          const { data: regentes } = await supabase
+            .from('users').select('nome, whatsapp')
+            .eq('ativo', true).eq('role', 'lider_funcao').eq('subdep_lider', 'regencia')
+          for (const u of (regentes || [])) {
+            if (!u.whatsapp) continue
+            if (pending.length === 0) {
+              await notify.cicloFaseAgradecimento(u.whatsapp, u.nome, 'briefings de Regência').catch(() => {})
+            } else {
+              await notify.cicloFasePendencia(u.whatsapp, u.nome, `briefing de Regência (${pending.length} domingo(s))`).catch(() => {})
+            }
+          }
+
+          const { data: lideres } = await supabase
+            .from('users').select('nome, whatsapp, subdep_lider')
+            .eq('ativo', true).eq('role', 'lider_funcao').neq('subdep_lider', 'regencia')
+          const prazo = new Date(Date.now() + 3 * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          for (const u of (lideres || [])) {
+            if (u.whatsapp && u.subdep_lider) {
+              await notify.briefingLideresAberto(u.whatsapp, u.nome, subdepLabel(u.subdep_lider), prazo).catch(() => {})
+            }
+          }
+          break
+        }
+
+        case 'disponibilidade': {
+          const sundays = getSundaysInCiclo(ciclo)
+          const subdepsToCheck = ['ebd', 'recepcao', 'midia']
+          for (const subdep of subdepsToCheck) {
+            const { data: brf } = await supabase
+              .from('briefings').select('domingo')
+              .eq('ciclo_id', cicloId).eq('subdepartamento', subdep)
+            const filled = new Set((brf || []).map(b => b.domingo))
+            const pending = sundays.filter(s => !filled.has(s))
+            const { data: lideres } = await supabase
+              .from('users').select('nome, whatsapp')
+              .eq('ativo', true).eq('role', 'lider_funcao').eq('subdep_lider', subdep)
+            for (const u of (lideres || [])) {
+              if (!u.whatsapp) continue
+              if (pending.length === 0) {
+                await notify.cicloFaseAgradecimento(u.whatsapp, u.nome, `briefings de ${subdepLabel(subdep)}`).catch(() => {})
+              } else {
+                await notify.cicloFasePendencia(u.whatsapp, u.nome, `briefing de ${subdepLabel(subdep)} (${pending.length} domingo(s))`).catch(() => {})
+              }
+            }
+          }
+          const { data: membros } = await supabase
+            .from('users').select('nome, whatsapp')
+            .eq('ativo', true).eq('role', 'membro_serve')
+          const prazo = new Date(Date.now() + 7 * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          for (const u of (membros || [])) {
+            if (u.whatsapp) await notify.disponibilidadeAberta(u.whatsapp, u.nome, prazo).catch(() => {})
+          }
+          break
+        }
+
+        case 'escala_publicada': {
+          const { data: escalas } = await supabase
+            .from('escalas').select('user_id, domingo, subdepartamento, users(nome, whatsapp)')
+            .eq('ciclo_id', cicloId).order('domingo', { ascending: true })
+          const byUser = {}
+          for (const e of (escalas || [])) {
+            if (!byUser[e.user_id]) byUser[e.user_id] = { user: e.users, list: [] }
+            byUser[e.user_id].list.push(e)
+          }
+          for (const { user, list } of Object.values(byUser)) {
+            if (user?.whatsapp) {
+              await notify.escalaPublicada(user.whatsapp, user.nome, list).catch(() => {})
+            }
+          }
+          break
+        }
+
+        case 'confirmacoes': {
+          const { data: escalas } = await supabase
+            .from('escalas').select('user_id, domingo, subdepartamento, users(nome, whatsapp)')
+            .eq('ciclo_id', cicloId).order('domingo', { ascending: true })
+          const byUser = {}
+          for (const e of (escalas || [])) {
+            if (!byUser[e.user_id]) byUser[e.user_id] = { user: e.users, list: [] }
+            byUser[e.user_id].list.push(e)
+          }
+          for (const { user, list } of Object.values(byUser)) {
+            if (user?.whatsapp) {
+              await notify.escalaPublicada(user.whatsapp, user.nome, list).catch(() => {})
+            }
+          }
+          break
+        }
+
+        default: break
+      }
+    } catch (err) {
+      console.error('[notificarCiclo]', err)
+    }
+  }
+
   // ── Load everything ───────────────────────────────────────────────────────
 
   const loadCycles = useCallback(async () => {
@@ -247,6 +383,8 @@ export default function DevModeManager() {
     try {
       const { error } = await supabase.from('ciclos').update({ status: next }).eq('id', cycle.id)
       if (error) throw error
+      // Fire WhatsApp notifications (non-blocking)
+      notificarCiclo(cycle.id, next, cycle).catch(e => console.warn('[notify]', e))
       await loadCycles()
     } catch (err) {
       alert('Erro: ' + err.message)
