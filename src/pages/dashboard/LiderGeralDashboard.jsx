@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   Users, AlertTriangle, CheckSquare, Bell,
   ChevronRight, Music, Calendar, Cake,
-  RefreshCw, Play
+  RefreshCw, Play, Megaphone
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
@@ -12,7 +12,7 @@ import { Badge, SubdepBadge, TarjaBadge } from '../../components/ui/Badge.jsx'
 import { Button } from '../../components/ui/Button.jsx'
 import { ConfirmModal } from '../../components/ui/Modal.jsx'
 import { runScheduleEngine } from '../../lib/scheduleEngine.js'
-import { formatDateShort, formatDomingo, isBirthdayThisWeek, daysSince, subdepLabel } from '../../lib/utils.js'
+import { formatDateShort, formatDomingo, isBirthdayThisWeek, daysSince, subdepLabel, formatDate } from '../../lib/utils.js'
 import { notify } from '../../lib/whatsapp.js'
 
 const SUBDEPS = ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']
@@ -59,15 +59,16 @@ export default function LiderGeralDashboard() {
     return SUBDEPS.filter(s => set.has(s))
   })()
 
-  const [metrics,  setMetrics]  = useState(null)
-  const [ciclo,    setCiclo]    = useState(null)
-  const [saude,    setSaude]    = useState({})
-  const [alertas,  setAlertas]  = useState([])
-  const [aniverss, setAniverss] = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [runModal, setRunModal] = useState(false)
-  const [running,  setRunning]  = useState(false)
-  const [runResult,setRunResult]= useState(null)
+  const [metrics,      setMetrics]      = useState(null)
+  const [ciclo,        setCiclo]        = useState(null)
+  const [saude,        setSaude]        = useState({})
+  const [alertas,      setAlertas]      = useState([])
+  const [aniverss,     setAniverss]     = useState([])
+  const [comunicados,  setComunicados]  = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [runModal,     setRunModal]     = useState(false)
+  const [running,      setRunning]      = useState(false)
+  const [runResult,    setRunResult]    = useState(null)
 
   useEffect(() => { loadDashboard() }, [])
 
@@ -96,6 +97,7 @@ export default function LiderGeralDashboard() {
         { data: membros },
         { data: tarjas },
         { data: membrosAniv },
+        { data: comunicadosData },
         ...saudeResults
       ] = await Promise.all([
         // Métricas
@@ -112,6 +114,8 @@ export default function LiderGeralDashboard() {
         supabase.from('users').select('nome, tarja, tarja_atualizada_em').eq('ativo', true).in('tarja', ['nicodemos', 'prodigo']),
         // Aniversariantes
         supabase.from('users').select('nome, data_nascimento').eq('ativo', true),
+        // Comunicados recentes
+        supabase.from('comunicados').select('*, users(nome, foto_url)').order('criado_em', { ascending: false }).limit(3),
         // Saúde dos subdeps — escalas e briefings em paralelo para cada subdep
         ...managedSubdeps.flatMap(subdep => [
           supabase.from('escalas').select('status_confirmacao, user_id').eq('ciclo_id', cicloId).eq('subdepartamento', subdep),
@@ -120,6 +124,8 @@ export default function LiderGeralDashboard() {
             : Promise.resolve({ data: [true] }), // louvor não tem briefing próprio → sempre "OK"
         ]),
       ])
+
+      setComunicados(comunicadosData || [])
 
       // ── 3. Processa disponibilidade
       const dispSet = new Set((dispUsers || []).map(d => d.user_id))
@@ -239,6 +245,43 @@ export default function LiderGeralDashboard() {
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Comunicados recentes */}
+      {comunicados.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <div className="flex items-center gap-1.5">
+              <Megaphone size={13} className="text-[var(--color-text-3)]" />
+              <span className="text-xs font-bold tracking-wider uppercase text-[var(--color-text-3)]">Comunicados</span>
+            </div>
+            <Link to="/announcements" className="text-xs text-primary-600 dark:text-primary-400 font-medium">
+              Gerenciar <ChevronRight size={11} className="inline" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {comunicados.map(c => (
+              <div
+                key={c.id}
+                className="rounded-2xl p-3 shadow-sm"
+                style={{ background: 'linear-gradient(135deg, #2d6aa8 0%, #4287f5 100%)' }}
+              >
+                <div className="flex items-start gap-2.5">
+                  <Avatar nome={c.users?.nome} src={c.users?.foto_url} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-xs font-semibold text-white truncate">
+                        {c.users?.nome?.split(' ')[0] || 'Líder'}
+                      </span>
+                      <span className="text-2xs text-white/70 whitespace-nowrap">{formatDate(c.criado_em)}</span>
+                    </div>
+                    <p className="text-sm text-white leading-snug">{c.texto}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Metrics */}
