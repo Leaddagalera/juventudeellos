@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
-import { Menu, X, Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
+import { Outlet, useLocation, Link } from 'react-router-dom'
+import { Menu, X, Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, LogOut, User } from 'lucide-react'
 import { Sidebar } from './Sidebar.jsx'
 import { MobileNav } from './MobileNav.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { Avatar } from '../ui/Card.jsx'
+import { subdepLabel } from '../../lib/utils.js'
 
 const PAGE_TITLES = {
   '/dashboard':     'Dashboard',
@@ -125,7 +126,25 @@ function HelpModal({ onClose }) {
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [helpOpen,    setHelpOpen]    = useState(false)
-  const { profile, isLiderGeral } = useAuth()
+  const { profile, isLiderGeral, signOut } = useAuth()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef(null)
+
+  // Fecha o menu ao clicar fora
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const handler = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
+  }, [userMenuOpen])
   const location = useLocation()
 
   useEffect(() => { setSidebarOpen(false) }, [location.pathname])
@@ -188,7 +207,65 @@ export function Layout() {
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-danger-500 animate-pulse-dot" />
               )}
             </button>
-            <Avatar nome={profile?.nome} src={profile?.foto_url} size="sm" className="lg:hidden" />
+            {/* Avatar clicável + dropdown de perfil */}
+            <div ref={userMenuRef} className="relative lg:hidden">
+              <button
+                onClick={() => setUserMenuOpen(v => !v)}
+                className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                aria-label="Menu do usuário"
+              >
+                <Avatar nome={profile?.nome} src={profile?.foto_url} size="sm" />
+              </button>
+
+              {userMenuOpen && (
+                <div className="absolute right-0 top-10 z-50 w-64 rounded-2xl shadow-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden animate-fade-in">
+
+                  {/* Cabeçalho com foto e nome */}
+                  <div className="flex items-center gap-3 px-4 py-4 bg-[var(--color-bg-2)]">
+                    <Avatar nome={profile?.nome} src={profile?.foto_url} size="lg" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[var(--color-text-1)] truncate">
+                        {profile?.nome?.split(' ').slice(0, 2).join(' ')}
+                      </p>
+                      <p className="text-xs text-[var(--color-text-3)] truncate">
+                        {(() => {
+                          const subs = Array.isArray(profile?.subdepartamento)
+                            ? profile.subdepartamento
+                            : profile?.subdepartamento ? [profile.subdepartamento] : []
+                          return subs.length > 0
+                            ? subs.map(s => subdepLabel(s)).join(' · ')
+                            : isLiderGeral ? 'Líder Geral' : 'Membro'
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-2 space-y-0.5">
+                    {/* Link para perfil */}
+                    <Link
+                      to="/profile"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)] transition-colors"
+                    >
+                      <User size={15} className="text-[var(--color-text-3)]" />
+                      Editar perfil
+                    </Link>
+
+                    {/* Divisor */}
+                    <div className="h-px bg-[var(--color-border)] my-1" />
+
+                    {/* Logout */}
+                    <button
+                      onClick={() => { setUserMenuOpen(false); signOut() }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-danger-600 dark:text-danger-400 hover:bg-danger-50 dark:hover:bg-danger-950/30 transition-colors"
+                    >
+                      <LogOut size={15} />
+                      Sair da conta
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
