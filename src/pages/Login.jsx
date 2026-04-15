@@ -4,6 +4,7 @@ import { Eye, EyeOff, Clock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { supabase } from '../lib/supabase.js'
 import { EllosLogo } from '../components/ui/Logo.jsx'
+import { TypewriterText } from '../components/ui/TypewriterText.jsx'
 
 // Fallback when no approved media exists
 const FALLBACK_SLIDES = [
@@ -200,9 +201,25 @@ export default function Login() {
       }}>
 
         {/* Logo */}
-        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
           <EllosLogo height={240} style={{ filter: 'brightness(0) invert(1) drop-shadow(0 2px 16px rgba(0,0,0,0.5))' }} />
         </div>
+
+        {/* Slogan fixo */}
+        <p style={{
+          color: 'rgba(255,255,255,0.38)',
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          textAlign: 'center',
+          margin: '0 0 2px',
+        }}>
+          O elo entre disponibilidade e serviço
+        </p>
+
+        {/* Animação de palavras — TypewriterText */}
+        <TypewriterText style={{ marginBottom: 28 }} />
 
         {/* Slide caption */}
         {slide?.descricao && hasMedia && (
