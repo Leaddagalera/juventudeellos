@@ -167,7 +167,7 @@ export default function Announcements() {
                 onChange={e => setTexto(e.target.value)}
                 rows={3}
               />
-              {canManage && (
+              {isLiderGeral && (
                 <Select label="Fixar no dashboard por" value={fixDias} onChange={e => setFixDias(e.target.value)}>
                   {FIXACAO_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
