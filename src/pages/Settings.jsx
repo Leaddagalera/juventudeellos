@@ -57,33 +57,22 @@ export const MSG_META = {
   aniversario:              { label: 'Aniversário de Membro',                 vars: ['{membro}', '{data}'] },
   novoCadastroPendente:     { label: 'Novo Cadastro Pendente',                vars: ['{nome}', '{subdep}', '{app_url}'] },
   midiaPendente:            { label: 'Conteúdo de Mídia Pendente',            vars: ['{descricao}', '{enviado_por}', '{app_url}'] },
+  membroAprovado:           { label: 'Cadastro Aprovado — Membro',            vars: ['{nome}', '{app_url}'] },
+  cicloFaseAgradecimento:   { label: 'Ciclo — Fase Concluída (Agradecimento)', vars: ['{nome}', '{tipo}', '{app_url}'] },
+  cicloFasePendencia:       { label: 'Ciclo — Fase com Pendência (Cobrança)', vars: ['{nome}', '{tipo}', '{app_url}'] },
 }
 
 const AUTOMATION_GROUPS = [
-  {
-    label: 'Ciclo — Briefings',
-    keys:  ['briefingRegentesAberto', 'briefingLideresAberto'],
-  },
-  {
-    label: 'Ciclo — Disponibilidade & Lembretes',
-    keys:  ['disponibilidadeAberta', 'lembreteMetadePrazo', 'lembrete90Prazo', 'encerramentoNaoPreencheu', 'encerramentoResumoLider'],
-  },
-  {
-    label: 'Escalas — Publicação & Confirmações',
-    keys:  ['escalaPublicada', 'sextaSemConfirmacao', 'sabadoSemConfirmacao', 'sabadoAlertaLider'],
-  },
-  {
-    label: 'Trocas',
-    keys:  ['trocaSolicitada', 'trocaAprovada', 'trocaRecusada'],
-  },
-  {
-    label: 'Pastoral',
-    keys:  ['segundaVisita', 'tarjaNegativaAlerta', 'aniversario'],
-  },
-  {
-    label: 'Sistema',
-    keys:  ['novoCadastroPendente', 'midiaPendente'],
-  },
+  { label: 'Ciclo — Feedback de Fase',            type: 'event',     keys: ['cicloFaseAgradecimento', 'cicloFasePendencia'] },
+  { label: 'Ciclo — Briefings',                   type: 'event',     keys: ['briefingRegentesAberto', 'briefingLideresAberto'] },
+  { label: 'Ciclo — Disponibilidade',             type: 'event',     keys: ['disponibilidadeAberta'] },
+  { label: 'Ciclo — Lembretes de Prazo',          type: 'scheduled', keys: ['lembreteMetadePrazo', 'lembrete90Prazo', 'encerramentoNaoPreencheu', 'encerramentoResumoLider'] },
+  { label: 'Escalas — Publicação',                type: 'event',     keys: ['escalaPublicada'] },
+  { label: 'Escalas — Confirmações',              type: 'scheduled', keys: ['sextaSemConfirmacao', 'sabadoSemConfirmacao', 'sabadoAlertaLider'] },
+  { label: 'Trocas',                              type: 'event',     keys: ['trocaSolicitada', 'trocaAprovada', 'trocaRecusada'] },
+  { label: 'Pastoral — Visitas e Tarjas',         type: 'event',     keys: ['segundaVisita', 'tarjaNegativaAlerta'] },
+  { label: 'Pastoral — Aniversários',             type: 'scheduled', keys: ['aniversario'] },
+  { label: 'Sistema',                             type: 'event',     keys: ['novoCadastroPendente', 'midiaPendente', 'membroAprovado'] },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -666,7 +655,17 @@ export default function Settings() {
 
           {AUTOMATION_GROUPS.map(group => (
             <Card key={group.label}>
-              <CardSection title={group.label}>
+              <CardSection
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>{group.label}</span>
+                    {group.type === 'event'
+                      ? <span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-400">⚡ Imediato</span>
+                      : <span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">🕐 Agendado</span>
+                    }
+                  </div>
+                }
+              >
                 <div className="divide-y divide-[var(--color-border)]">
                   {group.keys.map(key => {
                     const enabled = automations[key] !== undefined ? automations[key] : true
@@ -725,6 +724,42 @@ export default function Settings() {
       {/* ────────────────────────────── TAB: CONDIÇÕES ──────────────────────── */}
       {tab === 'condicoes' && (
         <div className="space-y-3">
+
+          {/* Prazos de preenchimento */}
+          <Card>
+            <CardSection title="Prazos de preenchimento">
+              <p className="text-xs text-[var(--color-text-3)] mb-3">
+                Quantos dias os responsáveis têm para preencher cada etapa do ciclo.
+                Esse prazo aparece na mensagem de abertura enviada automaticamente.
+              </p>
+              <div className="grid grid-cols-1 gap-3">
+                <Input
+                  label="Prazo — Briefing de Regência (dias)"
+                  type="number"
+                  min={1} max={14}
+                  value={conditions.prazoBriefingRegenteDias ?? 3}
+                  onChange={e => setConditions(c => ({ ...c, prazoBriefingRegenteDias: Number(e.target.value) }))}
+                  hint="Dias disponíveis para as regentes preencherem o briefing · padrão: 3"
+                />
+                <Input
+                  label="Prazo — Briefing de Líderes (dias)"
+                  type="number"
+                  min={1} max={14}
+                  value={conditions.prazoBriefingLiderDias ?? 3}
+                  onChange={e => setConditions(c => ({ ...c, prazoBriefingLiderDias: Number(e.target.value) }))}
+                  hint="Dias disponíveis para os líderes de função preencherem o briefing · padrão: 3"
+                />
+                <Input
+                  label="Prazo — Disponibilidade (dias)"
+                  type="number"
+                  min={1} max={21}
+                  value={conditions.prazoDisponibilidadeDias ?? 7}
+                  onChange={e => setConditions(c => ({ ...c, prazoDisponibilidadeDias: Number(e.target.value) }))}
+                  hint="Dias disponíveis para os membros preencherem a disponibilidade · padrão: 7"
+                />
+              </div>
+            </CardSection>
+          </Card>
 
           {/* Janela de envio */}
           <Card>

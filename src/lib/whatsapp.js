@@ -105,14 +105,17 @@ export const DEFAULT_AUTOMATIONS = {
 }
 
 export const DEFAULT_CONDITIONS = {
-  sendAfterHour:         8,
-  sendBeforeHour:        21,
-  reminder1Pct:          50,
-  reminder2Pct:          90,
-  diasLembreteSexta:     2,
-  diasLembreteSabado:    1,
-  diasSemTarjaAlerta:    30,
-  visitaAlertaAPartirDe: 2,
+  sendAfterHour:           8,
+  sendBeforeHour:          21,
+  reminder1Pct:            50,
+  reminder2Pct:            90,
+  diasLembreteSexta:       2,
+  diasLembreteSabado:      1,
+  diasSemTarjaAlerta:      30,
+  visitaAlertaAPartirDe:   2,
+  prazoBriefingRegenteDias: 3,   // days given to regentes to fill briefing
+  prazoBriefingLiderDias:   3,   // days given to function leaders to fill briefing
+  prazoDisponibilidadeDias: 7,   // days given to members to fill availability
 }
 
 // ── Config cache invalidation ──────────────────────────────────────────────

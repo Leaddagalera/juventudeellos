@@ -197,13 +197,21 @@ export default function DevModeManager() {
 
   async function notificarCiclo(cicloId, novoStatus, ciclo) {
     try {
+      // Load conditions from app_config
+      const { data: cfgRows } = await supabase
+        .from('app_config').select('key, value').eq('key', 'whatsapp_conditions')
+      const conditions = cfgRows?.[0]?.value || {}
+      const prazoBriefingRegente = conditions.prazoBriefingRegenteDias ?? 3
+      const prazoBriefingLider   = conditions.prazoBriefingLiderDias   ?? 3
+      const prazoDisponibilidade = conditions.prazoDisponibilidadeDias  ?? 7
+
       switch (novoStatus) {
 
         case 'briefing_regente': {
           const { data: users } = await supabase
             .from('users').select('nome, whatsapp')
             .eq('ativo', true).eq('role', 'lider_funcao').eq('subdep_lider', 'regencia')
-          const prazo = new Date(Date.now() + 3 * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          const prazo = new Date(Date.now() + prazoBriefingRegente * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           for (const u of (users || [])) {
             if (u.whatsapp) await notify.briefingRegentesAberto(u.whatsapp, u.nome, prazo).catch(() => {})
           }
@@ -233,7 +241,7 @@ export default function DevModeManager() {
           const { data: lideres } = await supabase
             .from('users').select('nome, whatsapp, subdep_lider')
             .eq('ativo', true).eq('role', 'lider_funcao').neq('subdep_lider', 'regencia')
-          const prazo = new Date(Date.now() + 3 * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          const prazo = new Date(Date.now() + prazoBriefingLider * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           for (const u of (lideres || [])) {
             if (u.whatsapp && u.subdep_lider) {
               await notify.briefingLideresAberto(u.whatsapp, u.nome, subdepLabel(u.subdep_lider), prazo).catch(() => {})
@@ -266,7 +274,7 @@ export default function DevModeManager() {
           const { data: membros } = await supabase
             .from('users').select('nome, whatsapp')
             .eq('ativo', true).eq('role', 'membro_serve')
-          const prazo = new Date(Date.now() + 7 * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          const prazo = new Date(Date.now() + prazoDisponibilidade * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           for (const u of (membros || [])) {
             if (u.whatsapp) await notify.disponibilidadeAberta(u.whatsapp, u.nome, prazo).catch(() => {})
           }
