@@ -89,7 +89,7 @@ const AUTOMATION_GROUPS = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Settings() {
-  const { isLiderGeral } = useAuth()
+  const { isLiderGeral, profile } = useAuth()
   const [tab,          setTab]          = useState('conexao')
   const [loadingConfig, setLoadingConfig] = useState(true)
 
@@ -460,30 +460,48 @@ export default function Settings() {
                 )}
               </div>
 
-              {/* Dev-only: send test message */}
-              {import.meta.env.DEV && (
-                <div className="flex items-center gap-3 pt-1 border-t border-[var(--color-border)] mt-1">
-                  <span className="text-2xs text-[var(--color-text-3)] font-mono bg-[var(--color-bg-2)] px-1.5 py-0.5 rounded">DEV</span>
-                  <Button
-                    size="xs"
-                    variant="secondary"
-                    onClick={async () => {
-                      try {
-                        await sendWhatsApp({
-                          numero: connection.api_key ? '5531999999999' : '5531999999999',
-                          mensagem: `🧪 Teste Ellos Juventude — ${new Date().toLocaleString('pt-BR')}`,
-                        })
-                        alert('Mensagem enviada — verifique o WhatsApp (ou o console em modo demo).')
-                      } catch (e) {
-                        alert('Erro: ' + e.message)
+              {/* Test message — sends to logged-in user's own WhatsApp */}
+              <div className="pt-1 border-t border-[var(--color-border)] mt-1 space-y-2">
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  onClick={async () => {
+                    const numero = profile?.whatsapp
+                    if (!numero) {
+                      setTestResult('error')
+                      setTestMsg('Seu perfil não tem número de WhatsApp. Preencha em Perfil antes de testar.')
+                      return
+                    }
+                    setTesting(true)
+                    setTestResult(null)
+                    setTestMsg('')
+                    try {
+                      const result = await sendWhatsApp({
+                        numero,
+                        mensagem: `🧪 *Teste Ellos Juventude*\n\nSe você recebeu esta mensagem, a integração com WhatsApp está funcionando! ✅\n\n_${new Date().toLocaleString('pt-BR')}_`,
+                      })
+                      if (result?.demo) {
+                        setTestResult('warn')
+                        setTestMsg('Modo demo — API não configurada. Verifique URL, API Key e Instância e clique em Salvar.')
+                      } else {
+                        setTestResult('ok')
+                        setTestMsg(`Mensagem enviada para ${numero}! Verifique seu WhatsApp.`)
                       }
-                    }}
-                  >
-                    Enviar mensagem de teste
-                  </Button>
-                  <span className="text-2xs text-[var(--color-text-3)]">Visível somente em desenvolvimento</span>
-                </div>
-              )}
+                    } catch (e) {
+                      setTestResult('error')
+                      setTestMsg('Erro ao enviar: ' + e.message)
+                    } finally {
+                      setTesting(false)
+                    }
+                  }}
+                  loading={testing}
+                >
+                  Enviar mensagem de teste
+                </Button>
+                <p className="text-2xs text-[var(--color-text-3)]">
+                  Envia para o seu próprio WhatsApp ({profile?.whatsapp || 'número não configurado no perfil'})
+                </p>
+              </div>
 
               {/* QR Code panel */}
               {(qrData || qrError || waState === 'open' || (waState === 'connecting' && pollRef.current)) && (
