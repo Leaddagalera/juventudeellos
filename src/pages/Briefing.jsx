@@ -723,15 +723,11 @@ export default function Briefing() {
                   return (
                     <tr key={domingo} className={`border-b border-[var(--color-border)] last:border-0 ${idx % 2 !== 0 ? 'bg-[var(--color-bg-2)]/40' : ''}`}>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
-                            <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{tema}</p>
-                          </div>
-                          {isEnsaio && (
-                            <Badge variant="blue" className="text-2xs">Ensaio</Badge>
-                          )}
-                        </div>
+                        <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
+                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{tema}</p>
+                        {isEnsaio && (
+                          <Badge variant="blue" className="text-2xs mt-1">Ensaio</Badge>
+                        )}
                       </td>
                       {visibleSubdeps.map(subdep => (
                         <td key={subdep} className="px-3 py-3">
