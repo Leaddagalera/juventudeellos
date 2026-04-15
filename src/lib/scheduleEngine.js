@@ -29,7 +29,7 @@ function getSundaysBetween(startStr, endStr) {
   return sundays
 }
 
-function isSecondSundayOfMonth(dateStr) {
+export function isSecondSundayOfMonth(dateStr) {
   const d = parseISO(dateStr)
   // Day of month divided by 7, floored = which week (1-indexed)
   const weekNum = Math.ceil(getDate(d) / 7)

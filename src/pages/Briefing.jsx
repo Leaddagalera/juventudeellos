@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2 } from 'lucide-react'
+import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Plus, Trash2, Music } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, EmptyState, Skeleton } from '../components/ui/Card.jsx'
@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/Badge.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { subdepLabel } from '../lib/utils.js'
 import { useSysConfig } from '../lib/sysConfig.js'
+import { isSecondSundayOfMonth } from '../lib/scheduleEngine.js'
 
 const INSTRUMENT_OPTS = [
   { value: 'violao',   label: 'Violão' },
@@ -67,6 +68,7 @@ const SUBDEP_COLORS = {
   ebd:      'text-emerald-400',
   recepcao: 'text-amber-400',
   midia:    'text-pink-400',
+  ensaio:   'text-violet-400',
 }
 
 // Determina o tema do culto pelo número do domingo no mês
@@ -232,6 +234,202 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
   )
 }
 
+// ── Modal de briefing de ensaio ──────────────────────────────────────────────
+function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSave }) {
+  const [form, setForm] = useState({ hinos: [], observacoes: '' })
+  const [loading, setLoading] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [membros, setMembros] = useState([])
+
+  useEffect(() => {
+    if (open) {
+      const base = briefing?.dados_json || {}
+      setForm({
+        hinos: Array.isArray(base.hinos) ? base.hinos : [],
+        observacoes: base.observacoes || '',
+      })
+      setSaved(false)
+      // Carregar membros ativos da regência para dropdown de solista
+      supabase
+        .from('users')
+        .select('id, nome')
+        .eq('ativo', true)
+        .then(({ data }) => {
+          const regenciaMembers = (data || []).filter(m => {
+            // Buscar todos os membros (líderes podem escalar qualquer um)
+            return true
+          })
+          setMembros(regenciaMembers)
+        })
+    }
+  }, [open, briefing])
+
+  const addHino = () => {
+    setForm(f => ({
+      ...f,
+      hinos: [...f.hinos, { nome: '', tom: '', solista_id: '', solista_nome: '', instrumentos: [] }]
+    }))
+  }
+
+  const removeHino = (index) => {
+    setForm(f => ({ ...f, hinos: f.hinos.filter((_, i) => i !== index) }))
+  }
+
+  const updateHino = (index, field, value) => {
+    setForm(f => {
+      const hinos = [...f.hinos]
+      hinos[index] = { ...hinos[index], [field]: value }
+      // Se mudou o solista_id, atualizar solista_nome
+      if (field === 'solista_id') {
+        const membro = membros.find(m => m.id === value)
+        hinos[index].solista_nome = membro?.nome || ''
+      }
+      return { ...f, hinos }
+    })
+  }
+
+  const handleSave = async () => {
+    setLoading(true)
+    setSaved(false)
+    try {
+      const query = briefing?.id
+        ? supabase.from('briefings').update({ dados_json: form }).eq('id', briefing.id)
+        : supabase.from('briefings').insert({
+            ciclo_id: cicloId,
+            subdepartamento: 'regencia',
+            domingo,
+            dados_json: form,
+            tipo: 'ensaio',
+          })
+
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Tempo esgotado. Verifique sua conexão e tente novamente.')), 10000)
+      )
+
+      const { error } = await Promise.race([query, timeout])
+      if (error) throw error
+
+      setSaved(true)
+      onSave?.()
+      setTimeout(() => { setSaved(false); onClose() }, 1200)
+    } catch (err) {
+      alert('Erro ao salvar: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Ensaio — ${formatDomingoShort(domingo)}`}
+      size="lg"
+      footer={!readOnly ? (
+        <>
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" onClick={handleSave} loading={loading}>
+            <Save size={13} />
+            {saved ? '✓ Salvo!' : 'Salvar'}
+          </Button>
+        </>
+      ) : (
+        <Button variant="secondary" size="sm" onClick={onClose}>Fechar</Button>
+      )}
+    >
+      <div className="space-y-4">
+        {/* Lista de hinos */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-[var(--color-text-2)] uppercase tracking-wide">Hinos</label>
+            {!readOnly && (
+              <Button variant="secondary" size="xs" onClick={addHino}>
+                <Plus size={12} />
+                Adicionar hino
+              </Button>
+            )}
+          </div>
+
+          {form.hinos.length === 0 && (
+            <div className="text-center py-6 text-sm text-[var(--color-text-3)]">
+              Nenhum hino adicionado. Clique em "Adicionar hino" para começar.
+            </div>
+          )}
+
+          {form.hinos.map((hino, idx) => (
+            <div key={idx} className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-2)]/50 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--color-text-2)] flex items-center gap-1.5">
+                  <Music size={12} />
+                  Hino {idx + 1}
+                </span>
+                {!readOnly && (
+                  <button onClick={() => removeHino(idx)} className="text-red-400 hover:text-red-300 transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+
+              <Input
+                label="Nome do hino"
+                placeholder="Ex: Grande é o Senhor"
+                value={hino.nome || ''}
+                onChange={e => updateHino(idx, 'nome', e.target.value)}
+                disabled={readOnly}
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label="Tom"
+                  placeholder="Ex: G maior"
+                  value={hino.tom || ''}
+                  onChange={e => updateHino(idx, 'tom', e.target.value)}
+                  disabled={readOnly}
+                />
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-[var(--color-text-2)]">Solista</label>
+                  <select
+                    value={hino.solista_id || ''}
+                    onChange={e => updateHino(idx, 'solista_id', e.target.value)}
+                    disabled={readOnly}
+                    className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                  >
+                    <option value="">Sem solista</option>
+                    {membros.map(m => (
+                      <option key={m.id} value={m.id}>{m.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--color-text-2)]">Instrumentos necessários</label>
+                <ChipSelect
+                  options={INSTRUMENT_OPTS}
+                  selected={hino.instrumentos || []}
+                  onChange={v => updateHino(idx, 'instrumentos', v)}
+                  disabled={readOnly}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Observações gerais */}
+        <Textarea
+          label="Observações gerais"
+          placeholder="Instruções adicionais para o ensaio..."
+          value={form.observacoes || ''}
+          onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+          rows={3}
+          disabled={readOnly}
+        />
+      </div>
+    </Modal>
+  )
+}
+
 // ── Célula do grid ───────────────────────────────────────────────────────────
 function GridCell({ briefing, onClick, readOnly }) {
   const filled = briefing && Object.keys(briefing.dados_json || {}).length > 0
@@ -276,11 +474,12 @@ export default function Briefing() {
 
   const isRegente = mySubdeps.includes('regencia')
 
-  const [ciclo,     setCiclo]     = useState(null)
-  const [domingos,  setDomingos]  = useState([])
-  const [briefings, setBriefings] = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [modal,     setModal]     = useState(null)
+  const [ciclo,        setCiclo]        = useState(null)
+  const [domingos,     setDomingos]     = useState([])
+  const [briefings,    setBriefings]    = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [modal,        setModal]        = useState(null)
+  const [ensaioModal,  setEnsaioModal]  = useState(null) // { domingo }
   // lider_geral começa na visão geral; os demais, direto no primeiro subdep deles
   const [activeTab, setActiveTab] = useState(
     isLiderGeral ? 'geral' : (visibleSubdeps[0] || 'geral')
@@ -344,7 +543,7 @@ export default function Briefing() {
   useEffect(() => { loadBriefings() }, [loadBriefings])
 
   const getBriefing = (domingo, subdep) =>
-    briefings.find(b => b.domingo === domingo && b.subdepartamento === subdep)
+    briefings.find(b => b.domingo === domingo && b.subdepartamento === subdep && b.tipo !== 'ensaio')
 
   const STATUS_LABEL = {
     briefing_regente: 'Preenchimento — Regentes',
@@ -369,6 +568,27 @@ export default function Briefing() {
     return false
   }
 
+  // Ensaio briefings: filtrar por tipo = 'ensaio'
+  const getEnsaioBriefing = (domingo) =>
+    briefings.find(b => b.domingo === domingo && b.tipo === 'ensaio')
+
+  // Ensaio: editável até o dia do domingo (não depende da fase do ciclo)
+  const canEditEnsaio = (domingo) => {
+    if (!ciclo) return false
+    if (isLiderGeral) return true
+    if (isLiderFuncao && (profile?.subdep_lider === 'regencia' || mySubdeps.includes('regencia'))) {
+      const sundayDate = new Date(domingo + 'T23:59:59')
+      return sundayDate >= new Date()
+    }
+    return false
+  }
+
+  // Domingos de ensaio dentro do ciclo (2º domingo do mês)
+  const ensaioDomingos = domingos.filter(d => isSecondSundayOfMonth(d))
+
+  // Aba Ensaio visível para quem tem acesso a regência
+  const showEnsaioTab = isLiderGeral || mySubdeps.includes('regencia') || profile?.subdep_lider === 'regencia'
+
   const isEditPhase = ciclo && ['briefing_regente', 'briefing_lider'].includes(ciclo.status)
 
   if (loading) return (
@@ -385,9 +605,12 @@ export default function Briefing() {
   )
 
   // Tabs: lider_geral tem "Visão Geral" + seus subdeps; os demais só seus subdeps
-  const tabs = isLiderGeral
+  const baseTabs = isLiderGeral
     ? [{ id: 'geral', label: 'Visão Geral' }, ...mySubdeps.map(s => ({ id: s, label: subdepLabel(s) }))]
     : visibleSubdeps.map(s => ({ id: s, label: subdepLabel(s) }))
+  const tabs = showEnsaioTab
+    ? [...baseTabs, { id: 'ensaio', label: 'Ensaio' }]
+    : baseTabs
 
   const activeModal = modal ? getBriefing(modal.domingo, modal.subdep) : null
 
@@ -490,19 +713,33 @@ export default function Briefing() {
               <tbody>
                 {domingos.map((domingo, idx) => {
                   const tema = sundayTheme(domingo)
+                  const isEnsaio = isSecondSundayOfMonth(domingo)
                   return (
                     <tr key={domingo} className={`border-b border-[var(--color-border)] last:border-0 ${idx % 2 !== 0 ? 'bg-[var(--color-bg-2)]/40' : ''}`}>
                       <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
-                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{tema}</p>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
+                            <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{tema}</p>
+                          </div>
+                          {isEnsaio && (
+                            <Badge variant="blue" className="text-2xs">Ensaio</Badge>
+                          )}
+                        </div>
                       </td>
                       {visibleSubdeps.map(subdep => (
                         <td key={subdep} className="px-3 py-3">
-                          <GridCell
-                            briefing={getBriefing(domingo, subdep)}
-                            readOnly={!canEdit(subdep)}
-                            onClick={() => setModal({ domingo, subdep })}
-                          />
+                          {isEnsaio && subdep !== 'regencia' ? (
+                            <div className="w-full h-12 rounded-lg flex items-center justify-center bg-[var(--color-bg-2)]/50 border border-[var(--color-border)]">
+                              <span className="text-2xs text-[var(--color-text-3)]">Ensaio</span>
+                            </div>
+                          ) : (
+                            <GridCell
+                              briefing={getBriefing(domingo, subdep)}
+                              readOnly={!canEdit(subdep)}
+                              onClick={() => setModal({ domingo, subdep })}
+                            />
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -512,6 +749,38 @@ export default function Briefing() {
             </table>
           </div>
         </Card>
+      ) : activeTab === 'ensaio' ? (
+        /* Lista de domingos de ensaio */
+        <div className="space-y-2">
+          {ensaioDomingos.length === 0 && (
+            <EmptyState icon={Music} title="Sem ensaios neste ciclo" description="Nenhum 2º domingo encontrado neste período." />
+          )}
+          {ensaioDomingos.map(domingo => {
+            const b = getEnsaioBriefing(domingo)
+            const hinosCount = b?.dados_json?.hinos?.length || 0
+            const editable = canEditEnsaio(domingo)
+            return (
+              <button
+                key={domingo}
+                onClick={() => setEnsaioModal({ domingo })}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl surface border border-[var(--color-border)] hover:bg-[var(--color-bg-2)] transition-colors"
+              >
+                <div className="text-left">
+                  <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
+                  <p className="text-2xs text-[var(--color-text-3)]">
+                    {hinosCount > 0 ? `${hinosCount} hino${hinosCount > 1 ? 's' : ''}` : 'Sem hinos'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={hinosCount > 0 ? 'green' : 'amber'}>
+                    {hinosCount > 0 ? 'Preenchido' : 'Pendente'}
+                  </Badge>
+                  {editable && <Edit2 size={13} className="text-[var(--color-text-3)]" />}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       ) : (
         subdepListContent(activeTab)
       )}
@@ -527,6 +796,19 @@ export default function Briefing() {
           subdep={modal.subdep}
           readOnly={!canEdit(modal.subdep)}
           isRegente={isRegente || isLiderGeral}
+          onSave={() => loadBriefings(true)}
+        />
+      )}
+
+      {/* Modal de ensaio */}
+      {ensaioModal && (
+        <EnsaioModal
+          open={!!ensaioModal}
+          onClose={() => setEnsaioModal(null)}
+          briefing={getEnsaioBriefing(ensaioModal.domingo)}
+          cicloId={ciclo.id}
+          domingo={ensaioModal.domingo}
+          readOnly={!canEditEnsaio(ensaioModal.domingo)}
           onSave={() => loadBriefings(true)}
         />
       )}
