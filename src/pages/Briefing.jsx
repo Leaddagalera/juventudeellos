@@ -729,17 +729,11 @@ export default function Briefing() {
                       </td>
                       {visibleSubdeps.map(subdep => (
                         <td key={subdep} className="px-3 py-3">
-                          {isEnsaio && subdep !== 'regencia' ? (
-                            <div className="w-full h-12 rounded-lg flex items-center justify-center bg-[var(--color-bg-2)]/50 border border-[var(--color-border)]">
-                              <span className="text-2xs text-[var(--color-text-3)]">Ensaio</span>
-                            </div>
-                          ) : (
-                            <GridCell
-                              briefing={getBriefing(domingo, subdep)}
-                              readOnly={!canEdit(subdep)}
-                              onClick={() => setModal({ domingo, subdep })}
-                            />
-                          )}
+                          <GridCell
+                            briefing={getBriefing(domingo, subdep)}
+                            readOnly={!canEdit(subdep)}
+                            onClick={() => setModal({ domingo, subdep })}
+                          />
                         </td>
                       ))}
                     </tr>
