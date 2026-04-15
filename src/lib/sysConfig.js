@@ -40,7 +40,7 @@ export const SYS_DEFAULTS = {
    * Which Sunday of the month is the Regência rehearsal (1-based).
    * Default: 2 = second Sunday.
    */
-  ensaio_week: 2,
+  ensaio_week: 4,
 
   /** Minimum number of members to assign per subdepartamento per Sunday. */
   slots: {
@@ -90,7 +90,7 @@ export async function getSysConfig() {
       avail_window_end:   map.sys_avail_window?.end   ?? SYS_DEFAULTS.avail_window_end,
       schedule_day:       map.sys_schedule_day        ?? SYS_DEFAULTS.schedule_day,
       history_days:       map.sys_history_days        ?? SYS_DEFAULTS.history_days,
-      ensaio_week:        map.sys_ensaio_week         ?? SYS_DEFAULTS.ensaio_week,
+      ensaio_week:        Number(map.sys_ensaio_week)  || SYS_DEFAULTS.ensaio_week,
       slots:              { ...SYS_DEFAULTS.slots, ...(map.sys_slots ?? {}) },
       subdepartamentos:   map.sys_subdepartamentos    ?? SYS_DEFAULTS.subdepartamentos,
     }

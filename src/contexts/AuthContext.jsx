@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase.js'
 
 const AuthContext = createContext(null)
@@ -250,7 +250,8 @@ export function AuthProvider({ children }) {
     if (session?.user) fetchProfile(session.user.id)
   }
 
-  const value = {
+  const role = profile?.role
+  const value = useMemo(() => ({
     session,
     profile,
     loading,
@@ -263,12 +264,12 @@ export function AuthProvider({ children }) {
     signUp,
     signOut,
     refreshProfile,
-    isLiderGeral:  profile?.role === 'lider_geral',
-    isLiderFuncao: profile?.role === 'lider_funcao',
-    isMembroServe: profile?.role === 'membro_serve',
-    isObservador:  profile?.role === 'membro_observador',
-    canEdit:       ['lider_geral', 'lider_funcao', 'membro_serve'].includes(profile?.role),
-  }
+    isLiderGeral:  role === 'lider_geral',
+    isLiderFuncao: role === 'lider_funcao',
+    isMembroServe: role === 'membro_serve',
+    isObservador:  role === 'membro_observador',
+    canEdit:       role === 'lider_geral' || role === 'lider_funcao' || role === 'membro_serve',
+  }), [session, profile, loading, hydrating, profileLoading, profileAttempted, darkMode, role, signIn, signOut, refreshProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
