@@ -198,7 +198,7 @@ export function AuthProvider({ children }) {
     }
   }, [fetchProfile])
 
-  const signIn = async (email, password) => {
+  const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
     if (data.user) {
@@ -210,9 +210,9 @@ export function AuthProvider({ children }) {
       }
     }
     return data
-  }
+  }, [])
 
-  const signUp = async (email, password, profileData) => {
+  const signUp = useCallback(async (email, password, profileData) => {
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: {
@@ -231,9 +231,9 @@ export function AuthProvider({ children }) {
     if (error) throw error
     await supabase.auth.signOut()
     return data
-  }
+  }, [])
 
-  const signOut = () => {
+  const signOut = useCallback(() => {
     Object.keys(localStorage)
       .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
       .forEach(k => localStorage.removeItem(k))
@@ -244,11 +244,11 @@ export function AuthProvider({ children }) {
     setProfileAttempted(false)
     setHydrating(false)
     window.location.href = '/login'
-  }
+  }, [])
 
-  const refreshProfile = () => {
+  const refreshProfile = useCallback(() => {
     if (session?.user) fetchProfile(session.user.id)
-  }
+  }, [session?.user?.id, fetchProfile])
 
   const role = profile?.role
   const value = useMemo(() => ({
