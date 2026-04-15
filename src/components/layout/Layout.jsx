@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Outlet, useLocation, Link } from 'react-router-dom'
-import { Menu, X, Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, LogOut, User } from 'lucide-react'
+import { Menu, X, Bell, BellOff, BellRing, HelpCircle, ExternalLink, ChevronDown, ChevronRight, LogOut, User, Check } from 'lucide-react'
 import { Sidebar } from './Sidebar.jsx'
 import { MobileNav } from './MobileNav.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
@@ -127,16 +127,19 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [helpOpen,    setHelpOpen]    = useState(false)
   const { profile, isLiderGeral, signOut } = useAuth()
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const userMenuRef = useRef(null)
+  const [userMenuOpen,  setUserMenuOpen]  = useState(false)
+  const [notifMenuOpen, setNotifMenuOpen] = useState(false)
+  const [notifPerm,     setNotifPerm]     = useState(() =>
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  )
+  const userMenuRef  = useRef(null)
+  const notifMenuRef = useRef(null)
 
-  // Fecha o menu ao clicar fora
+  // Fecha menus ao clicar fora
   useEffect(() => {
-    if (!userMenuOpen) return
     const handler = (e) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
-        setUserMenuOpen(false)
-      }
+      if (userMenuRef.current  && !userMenuRef.current.contains(e.target))  setUserMenuOpen(false)
+      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target)) setNotifMenuOpen(false)
     }
     document.addEventListener('mousedown', handler)
     document.addEventListener('touchstart', handler)
@@ -144,7 +147,13 @@ export function Layout() {
       document.removeEventListener('mousedown', handler)
       document.removeEventListener('touchstart', handler)
     }
-  }, [userMenuOpen])
+  }, [])
+
+  async function requestNotifPermission() {
+    if (typeof Notification === 'undefined') return
+    const result = await Notification.requestPermission()
+    setNotifPerm(result)
+  }
   const location = useLocation()
 
   useEffect(() => { setSidebarOpen(false) }, [location.pathname])
@@ -201,12 +210,91 @@ export function Layout() {
             >
               <HelpCircle size={17} />
             </button>
-            <button className="relative w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)] transition-colors">
-              <Bell size={16} />
-              {isLiderGeral && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-danger-500 animate-pulse-dot" />
+            {/* Sino + dropdown de notificações */}
+            <div ref={notifMenuRef} className="relative">
+              <button
+                onClick={() => { setNotifMenuOpen(v => !v); setUserMenuOpen(false) }}
+                className="relative w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)] transition-colors"
+                title="Notificações"
+              >
+                <Bell size={16} />
+                {/* Ponto vermelho: lider com pendências OU notificações não habilitadas */}
+                {(isLiderGeral || notifPerm !== 'granted') && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-danger-500 animate-pulse-dot" />
+                )}
+              </button>
+
+              {notifMenuOpen && (
+                <div className="absolute right-0 top-10 z-50 w-72 rounded-2xl shadow-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden animate-fade-in">
+
+                  {/* Cabeçalho */}
+                  <div className="px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-2)]">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-3)]">Notificações</p>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    {notifPerm === 'unsupported' && (
+                      <div className="flex items-start gap-3">
+                        <BellOff size={18} className="text-[var(--color-text-3)] flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-[var(--color-text-3)] leading-snug">
+                          Seu navegador não suporta notificações.
+                        </p>
+                      </div>
+                    )}
+
+                    {notifPerm === 'granted' && (
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-success-100 dark:bg-success-900/30 flex items-center justify-center flex-shrink-0">
+                          <Check size={15} className="text-success-600 dark:text-success-400" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-[var(--color-text-1)]">Notificações ativadas</p>
+                          <p className="text-xs text-[var(--color-text-3)]">Você receberá alertas deste app.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {notifPerm === 'default' && (
+                      <>
+                        <div className="flex items-start gap-3">
+                          <span className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                            <BellRing size={15} className="text-amber-600 dark:text-amber-400" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-[var(--color-text-1)]">Ativar notificações</p>
+                            <p className="text-xs text-[var(--color-text-3)] leading-snug">
+                              Receba alertas de escalas, comunicados e confirmações de presença.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={requestNotifPermission}
+                          className="w-full py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white text-sm font-semibold transition-colors"
+                        >
+                          Permitir notificações
+                        </button>
+                      </>
+                    )}
+
+                    {notifPerm === 'denied' && (
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-3">
+                          <span className="w-8 h-8 rounded-full bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0">
+                            <BellOff size={15} className="text-danger-600 dark:text-danger-400" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-[var(--color-text-1)]">Notificações bloqueadas</p>
+                            <p className="text-xs text-[var(--color-text-3)] leading-snug">
+                              Você bloqueou as notificações. Para reativar, acesse as configurações do navegador e permita notificações para este site.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
             {/* Avatar clicável + dropdown de perfil */}
             <div ref={userMenuRef} className="relative lg:hidden">
               <button
