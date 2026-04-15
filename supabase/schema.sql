@@ -65,10 +65,11 @@ create table if not exists public.briefings (
   subdepartamento text not null check (subdepartamento in ('louvor','regencia','ebd','recepcao','midia')),
   domingo         date not null,
   dados_json      jsonb not null default '{}',
+  tipo            text not null default 'regular',
   preenchido_por  uuid references public.users(id),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
-  unique (ciclo_id, subdepartamento, domingo)
+  unique (ciclo_id, subdepartamento, domingo, tipo)
 );
 
 -- ── DISPONIBILIDADES ─────────────────────────────────────────────────────────
