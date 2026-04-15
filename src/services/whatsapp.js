@@ -25,16 +25,17 @@ async function getConfig() {
 
   try {
     const { data } = await supabase
-      .from('configuracoes')
-      .select('chave, valor')
-      .in('chave', ['evolution_url', 'evolution_api_key', 'evolution_instance'])
+      .from('app_config')
+      .select('key, value')
+      .eq('key', 'whatsapp_connection')
+      .single()
 
-    const map = Object.fromEntries((data || []).map(r => [r.chave, r.valor]))
+    const conn = data?.value && typeof data.value === 'object' ? data.value : {}
 
     _configCache = {
-      url:      map.evolution_url      || import.meta.env.VITE_EVOLUTION_BASE_URL || '',
-      apiKey:   map.evolution_api_key  || import.meta.env.VITE_EVOLUTION_API_KEY  || '',
-      instance: map.evolution_instance || import.meta.env.VITE_EVOLUTION_INSTANCE || '',
+      url:      conn.base_url  || import.meta.env.VITE_EVOLUTION_BASE_URL || '',
+      apiKey:   conn.api_key   || import.meta.env.VITE_EVOLUTION_API_KEY  || '',
+      instance: conn.instance  || import.meta.env.VITE_EVOLUTION_INSTANCE || '',
     }
     _cacheExpiresAt = now + CACHE_TTL_MS
   } catch {

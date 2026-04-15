@@ -145,18 +145,6 @@ export default function Settings() {
         .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
       if (error) throw error
 
-      // Sync connection config to `configuracoes` table (used by services/whatsapp.js)
-      if (key === 'whatsapp_connection' && value) {
-        const rows = [
-          { chave: 'evolution_url',      valor: value.base_url || '' },
-          { chave: 'evolution_api_key',  valor: value.api_key  || '' },
-          { chave: 'evolution_instance', valor: value.instance || '' },
-        ].filter(r => r.valor)
-        if (rows.length) {
-          await supabase.from('configuracoes').upsert(rows, { onConflict: 'chave' })
-        }
-      }
-
       invalidateWhatsAppConfig()
       invalidateConfigCache()
       setSavedKey(key)
