@@ -12,17 +12,17 @@ const supabase = createClient(
 // ── Evolution API send ────────────────────────────────────────────────────────
 
 async function sendWpp(numero: string, mensagem: string) {
-  const { data: cfg } = await supabase
-    .from('configuracoes')
-    .select('chave, valor')
-    .in('chave', ['evolution_url', 'evolution_api_key', 'evolution_instance'])
+  const { data: row } = await supabase
+    .from('app_config')
+    .select('value')
+    .eq('key', 'whatsapp_connection')
+    .single()
 
-  const map: Record<string, string> = {}
-  for (const r of (cfg || [])) map[r.chave] = r.valor
+  const conn = (row?.value && typeof row.value === 'object') ? row.value as Record<string, string> : {}
 
-  const url      = map.evolution_url      || Deno.env.get('VITE_EVOLUTION_BASE_URL') || ''
-  const apiKey   = map.evolution_api_key  || Deno.env.get('VITE_EVOLUTION_API_KEY')  || ''
-  const instance = map.evolution_instance || Deno.env.get('VITE_EVOLUTION_INSTANCE') || ''
+  const url      = conn.base_url || Deno.env.get('EVOLUTION_BASE_URL') || ''
+  const apiKey   = conn.api_key  || Deno.env.get('EVOLUTION_API_KEY')  || ''
+  const instance = conn.instance || Deno.env.get('EVOLUTION_INSTANCE') || ''
 
   if (!url || !apiKey || !instance) {
     console.log('[DEMO] →', numero, ':', mensagem)
@@ -138,8 +138,22 @@ async function handleAniversarios() {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+const CRON_SECRET = Deno.env.get('CRON_SECRET') || 'ellos-cron-2026'
+
 Deno.serve(async (req: Request) => {
-  const { job } = await req.json().catch(() => ({}))
+  let body: Record<string, string> = {}
+  try { body = await req.json() } catch { /* no body */ }
+
+  // Accept either a valid JWT (manual test) or the shared cron secret
+  const authHeader = req.headers.get('Authorization') || ''
+  const isJwt = authHeader.startsWith('Bearer ')
+  const isSecret = body.secret === CRON_SECRET
+
+  if (!isJwt && !isSecret) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
+  }
+
+  const job = body.job
 
   const hour = new Date().getHours()
   if (hour < 8 || hour >= 21) {
