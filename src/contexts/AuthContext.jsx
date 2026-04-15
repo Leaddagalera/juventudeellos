@@ -162,12 +162,8 @@ export function AuthProvider({ children }) {
         if (event === 'INITIAL_SESSION') return
 
         if (event === 'SIGNED_OUT') {
-          // Verifica se o sign-out é real (pode ser spurious do refresh falho)
-          try {
-            const { data } = await supabase.auth.getSession()
-            if (!mounted) return
-            if (data.session) return // Ainda há sessão válida — ignora
-          } catch { /* trata como sign-out real */ }
+          // Se há cache/sessão local, ignora sign-out espúrio (comum no mobile)
+          if (getCachedProfile()) return
           setSession(null)
           setProfile(null)
           setCachedProfile(null)
@@ -187,8 +183,9 @@ export function AuthProvider({ children }) {
         setSession(prev => prev?.access_token === newSession?.access_token ? prev : newSession)
         setHydrating(false)
         if (newSession?.user) {
-          setProfileAttempted(false)
-          await fetchProfile(newSession.user.id)
+          // Usa silent para não resetar profileAttempted/profileLoading,
+          // o que causaria RequireAuth a desmontar a página (loop no mobile)
+          fetchProfile(newSession.user.id, { silent: true })
         }
       }
     )
