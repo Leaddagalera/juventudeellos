@@ -33,7 +33,7 @@ export default function Announcements() {
     try {
       const { data } = await supabase
         .from('comunicados')
-        .select('*, users(nome)')
+        .select('*, users(nome, foto_url)')
         .order('criado_em', { ascending: false })
         .limit(50)
       setComunicados(data || [])
@@ -105,7 +105,7 @@ export default function Announcements() {
           ) : comunicados.map(c => (
             <div key={c.id} className="py-3 border-b border-[var(--color-border)] last:border-0">
               <div className="flex items-start gap-2 mb-1">
-                <Avatar nome={c.users?.nome} size="xs" className="mt-0.5" />
+                <Avatar nome={c.users?.nome} src={c.users?.foto_url} size="xs" className="mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold text-[var(--color-text-1)]">{c.users?.nome || 'Líder'}</span>

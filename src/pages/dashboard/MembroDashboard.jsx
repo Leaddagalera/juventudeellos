@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, CheckSquare, ArrowLeftRight, Music, ChevronRight } from 'lucide-react'
+import { Calendar, CheckSquare, ArrowLeftRight, Music, ChevronRight, Megaphone } from 'lucide-react'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { Card, CardSection, EmptyState, Skeleton, Avatar } from '../../components/ui/Card.jsx'
@@ -8,7 +8,7 @@ import { Badge, SubdepBadge } from '../../components/ui/Badge.jsx'
 import { Button } from '../../components/ui/Button.jsx'
 import { Modal } from '../../components/ui/Modal.jsx'
 import { Textarea } from '../../components/ui/Input.jsx'
-import { formatDomingo, subdepLabel } from '../../lib/utils.js'
+import { formatDomingo, subdepLabel, formatDate } from '../../lib/utils.js'
 
 function ConfirmacaoInline({ escala, onConfirm }) {
   const statusMap = {
@@ -42,11 +42,12 @@ function ConfirmacaoInline({ escala, onConfirm }) {
 
 export default function MembroDashboard() {
   const { profile } = useAuth()
-  const [escalas,   setEscalas]   = useState([])
-  const [briefing,  setBriefing]  = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [trocaModal,setTrocaModal]= useState(false)
-  const [trocaAlvo, setTrocaAlvo] = useState(null)
+  const [escalas,     setEscalas]     = useState([])
+  const [briefing,    setBriefing]    = useState(null)
+  const [comunicados, setComunicados] = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [trocaModal,  setTrocaModal]  = useState(false)
+  const [trocaAlvo,   setTrocaAlvo]   = useState(null)
   const [trocaMotivo, setTrocaMotivo] = useState('')
   const [sendingTroca, setSendingTroca] = useState(false)
 
@@ -55,15 +56,18 @@ export default function MembroDashboard() {
   async function loadData() {
     setLoading(true)
     try {
-      // Ciclo e escalas em paralelo (escalas não dependem do ciclo para buscar)
-      const [{ data: ciclos }, { data: myEscalas }] = await Promise.all([
+      // Ciclo, escalas e comunicados em paralelo
+      const [{ data: ciclos }, { data: myEscalas }, { data: comunicadosData }] = await Promise.all([
         supabase.from('ciclos').select('*')
           .in('status', ['escala_publicada', 'confirmacoes'])
           .order('inicio', { ascending: false }).limit(1),
         supabase.from('escalas').select('*')
           .eq('user_id', profile.id)
           .order('domingo', { ascending: true }),
+        supabase.from('comunicados').select('*, users(nome, foto_url, role)')
+          .order('criado_em', { ascending: false }).limit(5),
       ])
+      setComunicados(comunicadosData || [])
 
       const ciclo = ciclos?.[0]
       if (!ciclo) { setLoading(false); return }
@@ -136,6 +140,48 @@ export default function MembroDashboard() {
           </p>
         </div>
       </div>
+
+      {/* Comunicados */}
+      {comunicados.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <div className="flex items-center gap-1.5">
+              <Megaphone size={13} className="text-[var(--color-text-3)]" />
+              <span className="text-xs font-bold tracking-wider uppercase text-[var(--color-text-3)]">Comunicados</span>
+            </div>
+            <Link to="/announcements" className="text-xs text-primary-600 dark:text-primary-400 font-medium">
+              Ver todos <ChevronRight size={11} className="inline" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {comunicados.slice(0, 3).map(c => (
+              <div
+                key={c.id}
+                className="rounded-2xl p-3 shadow-sm"
+                style={{ background: 'linear-gradient(135deg, #2d6aa8 0%, #4287f5 100%)' }}
+              >
+                <div className="flex items-start gap-2.5">
+                  <Avatar nome={c.users?.nome} src={c.users?.foto_url} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-semibold text-white truncate">
+                          {c.users?.role === 'lider_geral' || c.users?.role === 'lider_funcao' ? 'Líder' : c.users?.nome?.split(' ')[0] || 'Líder'}
+                        </span>
+                        <Badge variant="default" className="text-2xs bg-white/20 text-white border-transparent">
+                          {c.destinatario === 'todos' ? 'Todos' : subdepLabel(c.destinatario) || c.destinatario}
+                        </Badge>
+                      </div>
+                      <span className="text-2xs text-white/70 whitespace-nowrap">{formatDate(c.criado_em)}</span>
+                    </div>
+                    <p className="text-sm text-white leading-snug">{c.texto}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* My schedule */}
       <Card>
