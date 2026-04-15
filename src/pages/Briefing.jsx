@@ -224,6 +224,7 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
               })()}
             </div>
 
+            <Input label="Responsável pelo solo" placeholder="Ex: Larissa" value={form.solo || ''} onChange={e => set('solo', e.target.value)} disabled={readOnly} />
             {isRegente && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[var(--color-text-2)]">Instrumentos necessários</label>

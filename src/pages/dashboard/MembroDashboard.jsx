@@ -228,6 +228,12 @@ export default function MembroDashboard() {
                     <span className="text-xs font-medium text-[var(--color-text-1)] text-right">{briefing.dados_json.instrumentos_necessarios.join(' · ')}</span>
                   </div>
                 )}
+                {briefing.dados_json.solo && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-[var(--color-text-3)] flex-shrink-0">Solo</span>
+                    <span className="text-xs font-medium text-[var(--color-text-1)] text-right">{briefing.dados_json.solo}</span>
+                  </div>
+                )}
                 {(() => {
                   const url = briefing.dados_json.youtube_link
                   const match = url?.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/)
