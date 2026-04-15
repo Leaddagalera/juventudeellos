@@ -60,14 +60,17 @@ export function InstallPrompt() {
     }
 
     // Android/Chrome: aguarda o evento beforeinstallprompt
+    let timeoutId = null
     const handler = (e) => {
       e.preventDefault()
       setDeferredEvt(e)
-      const t = setTimeout(() => setShow(true), 3000)
-      return () => clearTimeout(t)
+      timeoutId = setTimeout(() => setShow(true), 3000)
     }
     window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
 
   const handleInstall = async () => {

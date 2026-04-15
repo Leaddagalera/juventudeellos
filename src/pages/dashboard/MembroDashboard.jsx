@@ -96,7 +96,8 @@ export default function MembroDashboard() {
   }
 
   async function confirmPresenca(escalaId, status) {
-    await supabase.from('escalas').update({ status_confirmacao: status }).eq('id', escalaId)
+    const { error } = await supabase.from('escalas').update({ status_confirmacao: status }).eq('id', escalaId)
+    if (error) { alert('Erro ao confirmar. Tente novamente.'); return }
     setEscalas(prev => prev.map(e => e.id === escalaId ? { ...e, status_confirmacao: status } : e))
   }
 

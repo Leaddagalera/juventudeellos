@@ -11,7 +11,7 @@ import { Card, Skeleton, EmptyState } from '../ui/Card.jsx'
 import { Button } from '../ui/Button.jsx'
 import { Input, Textarea } from '../ui/Input.jsx'
 import { Badge } from '../ui/Badge.jsx'
-import { Modal } from '../ui/Modal.jsx'
+import { Modal, ConfirmModal } from '../ui/Modal.jsx'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -239,13 +239,14 @@ function EventForm({ initial, onSave, onClose, saving }) {
 export default function EventsManager() {
   const { profile } = useAuth()
 
-  const [events,   setEvents]   = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [modal,    setModal]    = useState(false)          // 'create' | 'edit'
-  const [editing,  setEditing]  = useState(null)           // event object
-  const [saving,   setSaving]   = useState(false)
-  const [deleting, setDeleting] = useState(null)           // event id being deleted
-  const [expanded, setExpanded] = useState(null)           // expanded event id
+  const [events,      setEvents]      = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [modal,       setModal]       = useState(false)   // 'create' | 'edit'
+  const [editing,     setEditing]     = useState(null)    // event object
+  const [saving,      setSaving]      = useState(false)
+  const [deleting,    setDeleting]    = useState(null)    // event id being deleted
+  const [expanded,    setExpanded]    = useState(null)    // expanded event id
+  const [confirmDel,  setConfirmDel]  = useState(null)   // event id pending confirm
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -304,13 +305,14 @@ export default function EventsManager() {
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Excluir este evento? Esta ação não pode ser desfeita.')) return
-    setDeleting(id)
+  const handleDelete = async () => {
+    if (!confirmDel) return
+    setDeleting(confirmDel)
+    setConfirmDel(null)
     try {
-      const { error } = await supabase.from('eventos').delete().eq('id', id)
+      const { error } = await supabase.from('eventos').delete().eq('id', confirmDel)
       if (error) throw error
-      setEvents(prev => prev.filter(e => e.id !== id))
+      setEvents(prev => prev.filter(e => e.id !== confirmDel))
     } catch (err) {
       alert('Erro ao excluir: ' + err.message)
     } finally {
@@ -412,7 +414,7 @@ export default function EventsManager() {
                       <Button
                         size="sm"
                         variant="danger"
-                        onClick={() => handleDelete(ev.id)}
+                        onClick={() => setConfirmDel(ev.id)}
                         loading={deleting === ev.id}
                         className="flex-1"
                       >
@@ -441,6 +443,16 @@ export default function EventsManager() {
           saving={saving}
         />
       </Modal>
+
+      {/* Confirm delete modal */}
+      <ConfirmModal
+        open={!!confirmDel}
+        onClose={() => setConfirmDel(null)}
+        onConfirm={handleDelete}
+        title="Excluir evento"
+        message="Deseja excluir este evento? Esta ação não pode ser desfeita."
+        loading={!!deleting}
+      />
 
     </div>
   )

@@ -87,13 +87,14 @@ export default function Announcements() {
       const fixado_ate = fixDias
         ? new Date(Date.now() + parseInt(fixDias) * 86400000).toISOString()
         : null
-      await supabase.from('comunicados').insert({
+      const { error } = await supabase.from('comunicados').insert({
         autor_id:     profile.id,
         destinatario: dest,
         texto,
         fixado_ate,
         criado_em:    new Date().toISOString(),
       })
+      if (error) throw error
       setTexto(''); setDest('todos'); setFixDias('')
       loadComunicados()
     } catch (err) {

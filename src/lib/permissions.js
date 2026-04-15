@@ -88,6 +88,7 @@ export const DEFAULT_PERMISSIONS = {
 
 // ── Profile labels cache ──────────────────────────────────────────────────────
 
+const CACHE_TTL = 5 * 60 * 1000   // moved here so loadProfileLabels can reference it
 const _labelsCache = {}
 let _labelsCacheAt = 0
 
@@ -114,9 +115,8 @@ export function getProfileLabel(role) {
 
 // ── Module-level cache (5 min TTL) ────────────────────────────────────────────
 
-const _cache    = {}
-const _cacheAt  = {}
-const CACHE_TTL = 5 * 60 * 1000
+const _cache   = {}
+const _cacheAt = {}
 
 export async function getPerfilPermissions(role) {
   const now = Date.now()

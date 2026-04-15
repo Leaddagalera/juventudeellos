@@ -124,7 +124,7 @@ export default function Visitors() {
     try {
       const today = todayStr()
       const { data: prev } = await supabase
-        .from('visitantes').select('id').ilike('nome', `%${regForm.nome.trim()}%`)
+        .from('visitantes').select('id').ilike('nome', regForm.nome.trim())
         .limit(5)
       const isRecorrente = prev && prev.length > 0
       const { error } = await supabase.from('visitantes').insert({

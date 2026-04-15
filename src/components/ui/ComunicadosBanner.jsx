@@ -32,7 +32,8 @@ export function ComunicadosBanner({ profile, isLider = false }) {
   useEffect(() => {
     if (!profile) return
     load()
-  }, [profile?.id])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, profile?.role, isLider])
 
   async function load() {
     setLoading(true)

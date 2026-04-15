@@ -233,12 +233,14 @@ function ServiceHistory({ userId }) {
 
   useEffect(() => {
     if (!userId) return
+    let cancelled = false
     supabase.from('escalas')
       .select('domingo, subdepartamento, status_confirmacao')
       .eq('user_id', userId)
       .order('domingo', { ascending: false })
       .limit(20)
-      .then(({ data }) => setHistory(data || []))
+      .then(({ data }) => { if (!cancelled) setHistory(data || []) })
+    return () => { cancelled = true }
   }, [userId])
 
   if (!history) return null

@@ -228,21 +228,33 @@ export default function Media() {
 
   // Upload state
   const [file,       setFile]       = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
   const [descricao,  setDescricao]  = useState('')
   const [progress,   setProgress]   = useState(0)
   const [uploading,  setUploading]  = useState(false)
   const [uploadErr,  setUploadErr]  = useState('')
   const [ratioWarn,  setRatioWarn]  = useState('')   // aspect-ratio warning
 
+  // Gera e revoga o object URL do arquivo selecionado para evitar memory leak
+  useEffect(() => {
+    if (!file) { setPreviewUrl(null); return }
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
   // ── Load ────────────────────────────────────────────────────────────────────
   const loadMedia = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('conteudo_login')
-      .select('*')
-      .order('criado_em', { ascending: false })
-    setItems(data || [])
-    setLoading(false)
+    try {
+      const { data } = await supabase
+        .from('conteudo_login')
+        .select('*')
+        .order('criado_em', { ascending: false })
+      setItems(data || [])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadMedia() }, [loadMedia])
@@ -283,6 +295,7 @@ export default function Media() {
 
   function resetModal() {
     setFile(null)
+    setPreviewUrl(null)
     setDescricao('')
     setProgress(0)
     setUploading(false)
@@ -535,14 +548,14 @@ export default function Media() {
                 style={{ aspectRatio: '9/16', maxHeight: 220, position: 'relative' }}>
                 {file.type.startsWith('video/') ? (
                   <video
-                    src={URL.createObjectURL(file)}
+                    src={previewUrl}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                     muted
                     controls
                   />
                 ) : (
                   <img
-                    src={URL.createObjectURL(file)}
+                    src={previewUrl}
                     alt="preview"
                     style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                   />

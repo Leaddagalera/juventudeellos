@@ -70,9 +70,14 @@ export default function LiderGeralDashboard() {
   const [running,      setRunning]      = useState(false)
   const [runResult,    setRunResult]    = useState(null)
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => {
+    let cancelled = false
+    loadDashboard(cancelled)
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id])
 
-  async function loadDashboard() {
+  async function loadDashboard(cancelled) {
     setLoading(true)
     try {
       // ── 1. Busca o ciclo ativo primeiro (necessário para as queries seguintes)
@@ -125,6 +130,8 @@ export default function LiderGeralDashboard() {
         ]),
       ])
 
+      if (cancelled) return
+
       setComunicados(comunicadosData || [])
 
       // ── 3. Processa disponibilidade
@@ -173,9 +180,9 @@ export default function LiderGeralDashboard() {
       setAniverss((membrosAniv || []).filter(m => isBirthdayThisWeek(m.data_nascimento)))
 
     } catch (err) {
-      console.error('[Dashboard]', err)
+      if (!cancelled) console.error('[Dashboard]', err)
     } finally {
-      setLoading(false)
+      if (!cancelled) setLoading(false)
     }
   }
 

@@ -279,7 +279,8 @@ export default function Members() {
     if (!delMember) return
     setDelLoading(true)
     try {
-      await supabase.from('users').delete().eq('id', delMember.id)
+      const { error } = await supabase.from('users').delete().eq('id', delMember.id)
+      if (error) throw error
       setDelMember(null)
       loadMembers()
     } catch (err) {
@@ -290,7 +291,8 @@ export default function Members() {
   }
 
   async function approveUser(id) {
-    await supabase.from('users').update({ ativo: true }).eq('id', id)
+    const { error } = await supabase.from('users').update({ ativo: true }).eq('id', id)
+    if (error) { alert(error.message); return }
     // Notify member their account was approved
     const member = pendentes.find(m => m.id === id)
     if (member?.whatsapp) {

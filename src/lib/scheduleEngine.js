@@ -88,27 +88,31 @@ export async function runScheduleEngine(cicloId) {
   const domingos = getSundaysBetween(ciclo.inicio, ciclo.fim)
 
   // 3. Load briefings
-  const { data: briefings } = await supabase
+  const { data: briefings, error: e1 } = await supabase
     .from('briefings').select('*').eq('ciclo_id', cicloId)
+  if (e1) throw e1
 
   // 4. Load availability
-  const { data: disponibilidades } = await supabase
+  const { data: disponibilidades, error: e2 } = await supabase
     .from('disponibilidades').select('*').eq('ciclo_id', cicloId)
+  if (e2) throw e2
 
   // 5. Load active serve-members with full profile
-  const { data: membros } = await supabase
+  const { data: membros, error: e3 } = await supabase
     .from('users')
     .select('*')
     .eq('ativo', true)
     .eq('role', 'membro_serve')
+  if (e3) throw e3
 
   // 6. Load recent schedule history (last 90 days for priority)
   const ninetyDaysAgo = new Date()
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-  const { data: historico } = await supabase
+  const { data: historico, error: e4 } = await supabase
     .from('escalas')
     .select('user_id, domingo, subdepartamento')
     .gte('domingo', ninetyDaysAgo.toISOString().split('T')[0])
+  if (e4) throw e4
 
   const escalaRows = []
   const sundaysCovered = {}

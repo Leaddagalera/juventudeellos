@@ -176,6 +176,8 @@ export default function Schedule() {
           await notify.trocaSolicitada(l.whatsapp, profile.nome, domingo, trocaMotivo).catch(() => {})
         }
       }
+    } catch (err) {
+      alert('Erro ao solicitar troca: ' + err.message)
     } finally {
       setTrocaSending(false)
     }

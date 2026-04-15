@@ -151,7 +151,7 @@ export default function Reports() {
   ].filter(d => d.value > 0) : [], [data])
 
   const pctConfirm = data ? Math.round((data.confirmados / Math.max(data.totalEsc, 1)) * 100) : 0
-  const pctAprov = data ? Math.round((data.totalEsc / Math.max(data.totalDisp, 1)) * 100) : 0
+  const pctAprov = data ? Math.min(100, Math.round((data.totalEsc / Math.max(data.totalDisp, 1)) * 100)) : 0
 
   if (loading && !data) return (
     <div className="p-4 lg:p-6 space-y-3 max-w-5xl mx-auto">
