@@ -208,6 +208,8 @@ export function usePermissions() {
   const { profile } = useAuth()
   const role         = profile?.role
   const subdep       = profile?.subdepartamento
+  // Serializa array para string estável como dep do useEffect
+  const subdepKey    = Array.isArray(subdep) ? subdep.join(',') : (subdep || '')
   const fallback = DEFAULT_PERMISSIONS[role] || { telas: [], acoes: [], campos_visiveis: [] }
 
   const [perms,  setPerms]  = useState(() => applySubdepRules(fallback, subdep))
@@ -233,7 +235,8 @@ export function usePermissions() {
     })
 
     return () => { cancelled = true }
-  }, [role, subdep])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, subdepKey])
 
   return {
     /** Can the current user perform this action? */

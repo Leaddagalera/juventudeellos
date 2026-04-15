@@ -53,7 +53,8 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabase
         .from('users').select('*').eq('id', userId).single()
       if (error) throw error
-      setProfile(data)
+      // Só atualiza referência se os dados realmente mudaram
+      setProfile(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data)
       setCachedProfile(data)
       return data
     } catch (err) {
@@ -113,7 +114,7 @@ export function AuthProvider({ children }) {
         }
 
         if (!mounted) return
-        setSession(sessionData)
+        setSession(prev => prev?.access_token === sessionData?.access_token ? prev : sessionData)
 
         if (!sessionData?.user) {
           // Sessão inválida ou expirada
@@ -177,13 +178,13 @@ export function AuthProvider({ children }) {
 
         if (event === 'TOKEN_REFRESHED') {
           // Token renovado silenciosamente — atualiza sessão e encerra hydrating
-          setSession(newSession)
+          setSession(prev => prev?.access_token === newSession?.access_token ? prev : newSession)
           setHydrating(false)
           return
         }
 
         // SIGNED_IN, USER_UPDATED, etc.
-        setSession(newSession)
+        setSession(prev => prev?.access_token === newSession?.access_token ? prev : newSession)
         setHydrating(false)
         if (newSession?.user) {
           setProfileAttempted(false)
@@ -251,6 +252,8 @@ export function AuthProvider({ children }) {
   }, [session?.user?.id, fetchProfile])
 
   const role = profile?.role
+  const profileId = profile?.id
+  const sessionToken = session?.access_token
   const value = useMemo(() => ({
     session,
     profile,
@@ -269,7 +272,8 @@ export function AuthProvider({ children }) {
     isMembroServe: role === 'membro_serve',
     isObservador:  role === 'membro_observador',
     canEdit:       role === 'lider_geral' || role === 'lider_funcao' || role === 'membro_serve',
-  }), [session, profile, loading, hydrating, profileLoading, profileAttempted, darkMode, role, signIn, signOut, refreshProfile])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [sessionToken, profileId, role, loading, hydrating, profileLoading, profileAttempted, darkMode, signIn, signUp, signOut, refreshProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
