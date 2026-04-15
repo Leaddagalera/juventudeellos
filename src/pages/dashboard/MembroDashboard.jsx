@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, CheckSquare, ArrowLeftRight, Music, ChevronRight, Megaphone } from 'lucide-react'
+import { Calendar, CheckSquare, ArrowLeftRight, Music, ChevronRight, Megaphone, Youtube } from 'lucide-react'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { Card, CardSection, EmptyState, Skeleton, Avatar } from '../../components/ui/Card.jsx'
@@ -208,12 +208,12 @@ export default function MembroDashboard() {
             <p className="text-xs font-semibold text-[var(--color-text-2)] mb-2">
               Briefing — {subdepLabel(briefing.subdepartamento)}
             </p>
-            {briefing.subdepartamento === 'louvor' && briefing.dados_json && (
+            {(briefing.subdepartamento === 'louvor' || briefing.subdepartamento === 'regencia') && briefing.dados_json && (
               <div className="space-y-1.5">
                 {briefing.dados_json.hinos && (
-                  <div className="flex justify-between">
-                    <span className="text-xs text-[var(--color-text-3)]">Hino(s)</span>
-                    <span className="text-xs font-medium text-[var(--color-text-1)]">{briefing.dados_json.hinos}</span>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-[var(--color-text-3)] flex-shrink-0">Hino(s)</span>
+                    <span className="text-xs font-medium text-[var(--color-text-1)] text-right">{briefing.dados_json.hinos}</span>
                   </div>
                 )}
                 {briefing.dados_json.tom && (
@@ -223,11 +223,38 @@ export default function MembroDashboard() {
                   </div>
                 )}
                 {briefing.dados_json.instrumentos_necessarios?.length > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-xs text-[var(--color-text-3)]">Instrumentos</span>
-                    <span className="text-xs font-medium text-[var(--color-text-1)]">{briefing.dados_json.instrumentos_necessarios.join(' · ')}</span>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-xs text-[var(--color-text-3)] flex-shrink-0">Instrumentos</span>
+                    <span className="text-xs font-medium text-[var(--color-text-1)] text-right">{briefing.dados_json.instrumentos_necessarios.join(' · ')}</span>
                   </div>
                 )}
+                {(() => {
+                  const url = briefing.dados_json.youtube_link
+                  const match = url?.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/)
+                  const vid = match?.[1]
+                  if (!vid) return null
+                  return (
+                    <a
+                      href={`https://www.youtube.com/watch?v=${vid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 mt-2 p-2 rounded-xl bg-[var(--color-bg-2)] hover:bg-[var(--color-bg-3)] transition-colors group"
+                    >
+                      <img
+                        src={`https://img.youtube.com/vi/${vid}/mqdefault.jpg`}
+                        alt="Thumbnail"
+                        className="w-16 h-11 rounded-lg object-cover flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1 text-xs font-medium text-[var(--color-text-2)] group-hover:text-primary-500 transition-colors">
+                          <Youtube size={12} className="text-red-500 flex-shrink-0" />
+                          <span className="truncate">{briefing.dados_json.hinos || 'Ver hino'}</span>
+                        </div>
+                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">Toque para abrir no YouTube</p>
+                      </div>
+                    </a>
+                  )
+                })()}
               </div>
             )}
             {briefing.subdepartamento === 'ebd' && briefing.dados_json && (

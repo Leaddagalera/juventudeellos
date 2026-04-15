@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Plus, Trash2, Music } from 'lucide-react'
+import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Plus, Trash2, Music, Youtube, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, EmptyState, Skeleton } from '../components/ui/Card.jsx'
@@ -57,6 +57,19 @@ function getEbdLesson(sundayStr) {
     if (weekIndex >= 0 && weekIndex < tri.licoes.length) {
       return tri.licoes[weekIndex]
     }
+  }
+  return null
+}
+
+// Extrai o ID do vídeo de qualquer formato de URL do YouTube
+function extractYouTubeId(url) {
+  if (!url) return null
+  const patterns = [
+    /(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/,
+  ]
+  for (const re of patterns) {
+    const m = url.match(re)
+    if (m) return m[1]
   }
   return null
 }
@@ -167,6 +180,50 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
           <div className="space-y-3">
             <Input label="Hino(s)" placeholder="Ex: Grande é o Senhor" value={form.hinos || ''} onChange={e => set('hinos', e.target.value)} disabled={readOnly} />
             <Input label="Tom" placeholder="Ex: G maior" value={form.tom || ''} onChange={e => set('tom', e.target.value)} disabled={readOnly} />
+
+            {/* Link do YouTube */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--color-text-2)] flex items-center gap-1.5">
+                <Youtube size={13} className="text-red-500" />
+                Link do hino (YouTube)
+              </label>
+              <input
+                className="input-base"
+                placeholder="https://youtube.com/watch?v=..."
+                value={form.youtube_link || ''}
+                onChange={e => set('youtube_link', e.target.value)}
+                disabled={readOnly}
+                type="url"
+                inputMode="url"
+              />
+              {/* Thumbnail preview */}
+              {(() => {
+                const vid = extractYouTubeId(form.youtube_link)
+                if (!vid) return null
+                return (
+                  <a
+                    href={`https://www.youtube.com/watch?v=${vid}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group relative block rounded-xl overflow-hidden border border-[var(--color-border)] hover:border-primary-400 transition-colors"
+                  >
+                    <img
+                      src={`https://img.youtube.com/vi/${vid}/mqdefault.jpg`}
+                      alt="Thumbnail do hino"
+                      className="w-full h-auto object-cover"
+                      onError={e => { e.currentTarget.style.display = 'none' }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1.5 bg-white/90 dark:bg-black/70 text-xs font-semibold px-3 py-1.5 rounded-full text-[var(--color-text-1)]">
+                        <ExternalLink size={12} />
+                        Abrir no YouTube
+                      </div>
+                    </div>
+                  </a>
+                )
+              })()}
+            </div>
+
             {isRegente && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[var(--color-text-2)]">Instrumentos necessários</label>
