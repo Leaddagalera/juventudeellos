@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import { usePermissions } from '../../lib/permissions.js'
 import { cn } from '../../lib/utils.js'
 import { Avatar } from '../ui/Card.jsx'
-import { FlameLogo } from '../ui/Logo.jsx'
+import { EllosLogo } from '../ui/Logo.jsx'
 
 // All possible nav items, tagged by the screen ID in the `perfis` table
 const ALL_LINKS = [
@@ -33,12 +33,12 @@ export function Sidebar({ onClose }) {
   return (
     <aside className="flex flex-col h-full w-60 bg-[var(--color-surface)] border-r border-[var(--color-border)]">
       {/* Header */}
-      <div className="topbar-gradient px-4 py-4 flex-shrink-0">
-        <div className="flex items-center gap-2.5 mb-0.5">
-          <FlameLogo size={28} color="white" />
-          <span className="text-white font-semibold text-sm">Ellos Juventude</span>
-        </div>
-        <p className="text-[#9BB5D0] text-2xs pl-10">Assembleia de Deus</p>
+      <div className="topbar-gradient px-4 py-3 flex-shrink-0 flex flex-col items-center">
+        <EllosLogo
+          height={72}
+          style={{ filter: 'brightness(0) invert(1) drop-shadow(0 1px 6px rgba(0,0,0,0.4))' }}
+        />
+        <p className="text-[#9BB5D0] text-2xs mt-0.5">Assembleia de Deus</p>
       </div>
 
       {/* Nav */}
