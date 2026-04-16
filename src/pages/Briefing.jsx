@@ -361,30 +361,33 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
 
 // ── Modal de briefing de ensaio ──────────────────────────────────────────────
 function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSave }) {
-  const [form, setForm] = useState({ hinos: [], observacoes: '' })
-  const [loading, setLoading] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [membros, setMembros] = useState([])
+  const [form,     setForm]     = useState({ hinos: [], observacoes: '', regente_id: '', regente_nome: '' })
+  const [loading,  setLoading]  = useState(false)
+  const [saved,    setSaved]    = useState(false)
+  const [membros,  setMembros]  = useState([])
+  const [regentes, setRegentes] = useState([])
 
   useEffect(() => {
     if (open) {
       const base = briefing?.dados_json || {}
       setForm({
-        hinos: Array.isArray(base.hinos) ? base.hinos : [],
-        observacoes: base.observacoes || '',
+        hinos:        Array.isArray(base.hinos) ? base.hinos : [],
+        observacoes:  base.observacoes  || '',
+        regente_id:   base.regente_id   || '',
+        regente_nome: base.regente_nome || '',
       })
       setSaved(false)
-      // Carregar membros ativos da regência para dropdown de solista
-      supabase
-        .from('users')
-        .select('id, nome')
-        .eq('ativo', true)
+      supabase.from('users').select('id, nome, role, subdepartamento').eq('ativo', true)
         .then(({ data }) => {
-          const regenciaMembers = (data || []).filter(m => {
-            // Buscar todos os membros (líderes podem escalar qualquer um)
-            return true
-          })
-          setMembros(regenciaMembers)
+          const todos = data || []
+          setMembros(todos)
+          setRegentes(todos.filter(m => {
+            if (m.role === 'lider_geral') return true
+            const subdeps = Array.isArray(m.subdepartamento)
+              ? m.subdepartamento
+              : m.subdepartamento ? [m.subdepartamento] : []
+            return m.role === 'lider_funcao' && subdeps.includes('regencia')
+          }))
         })
     }
   }, [open, briefing])
@@ -392,7 +395,7 @@ function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSa
   const addHino = () => {
     setForm(f => ({
       ...f,
-      hinos: [...f.hinos, { nome: '', tom: '', solista_id: '', solista_nome: '', instrumentos: [] }]
+      hinos: [...f.hinos, { nome: '', tom: '', solista_1_id: '', solista_1_nome: '', solista_2_id: '', solista_2_nome: '', instrumentos: [] }]
     }))
   }
 
@@ -404,10 +407,11 @@ function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSa
     setForm(f => {
       const hinos = [...f.hinos]
       hinos[index] = { ...hinos[index], [field]: value }
-      // Se mudou o solista_id, atualizar solista_nome
-      if (field === 'solista_id') {
-        const membro = membros.find(m => m.id === value)
-        hinos[index].solista_nome = membro?.nome || ''
+      if (field === 'solista_1_id') {
+        hinos[index].solista_1_nome = membros.find(m => m.id === value)?.nome || ''
+      }
+      if (field === 'solista_2_id') {
+        hinos[index].solista_2_nome = membros.find(m => m.id === value)?.nome || ''
       }
       return { ...f, hinos }
     })
@@ -463,6 +467,25 @@ function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSa
       )}
     >
       <div className="space-y-4">
+        {/* Regente */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-[var(--color-text-2)]">Regente</label>
+          <select
+            value={form.regente_id || ''}
+            onChange={e => {
+              const m = regentes.find(r => r.id === e.target.value)
+              setForm(f => ({ ...f, regente_id: e.target.value, regente_nome: m?.nome || '' }))
+            }}
+            disabled={readOnly}
+            className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+          >
+            <option value="">Selecionar regente…</option>
+            {regentes.map(m => (
+              <option key={m.id} value={m.id}>{m.nome}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Lista de hinos */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -511,21 +534,27 @@ function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSa
                   onChange={e => updateHino(idx, 'tom', e.target.value)}
                   disabled={readOnly}
                 />
+                {/* placeholder para manter grid 2 cols — coluna vazia */}
+                <div />
+              </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-[var(--color-text-2)]">Solista</label>
-                  <select
-                    value={hino.solista_id || ''}
-                    onChange={e => updateHino(idx, 'solista_id', e.target.value)}
-                    disabled={readOnly}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
-                  >
-                    <option value="">Sem solista</option>
-                    {membros.map(m => (
-                      <option key={m.id} value={m.id}>{m.nome}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[['solista_1_id', 'Solista 1'], ['solista_2_id', 'Solista 2']].map(([key, label]) => (
+                  <div key={key} className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-[var(--color-text-2)]">{label}</label>
+                    <select
+                      value={hino[key] || ''}
+                      onChange={e => updateHino(idx, key, e.target.value)}
+                      disabled={readOnly}
+                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                    >
+                      <option value="">Nenhum</option>
+                      {membros.map(m => (
+                        <option key={m.id} value={m.id}>{m.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
 
               <div className="flex flex-col gap-1.5">
