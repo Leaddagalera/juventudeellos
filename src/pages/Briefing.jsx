@@ -105,9 +105,11 @@ function formatDomingoShort(dateStr) {
 // ── Modal de edição de briefing ──────────────────────────────────────────────
 function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, readOnly, isRegente, onSave }) {
   const tema = sundayTheme(domingo)
-  const [form,    setForm]    = useState({})
-  const [loading, setLoading] = useState(false)
-  const [saved,   setSaved]   = useState(false)
+  const [form,     setForm]     = useState({})
+  const [loading,  setLoading]  = useState(false)
+  const [saved,    setSaved]    = useState(false)
+  const [membros,  setMembros]  = useState([])
+  const [regentes, setRegentes] = useState([])
 
   useEffect(() => {
     if (open) {
@@ -120,6 +122,23 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
       }
       setForm({ ...defaults, ...base })
       setSaved(false)
+
+      // Carrega membros para dropdowns de Regência
+      if (subdep === 'regencia') {
+        supabase.from('users').select('id, nome, role, subdepartamento').eq('ativo', true)
+          .then(({ data }) => {
+            const todos = data || []
+            setMembros(todos)
+            // Líderes de regência: role lider_geral ou lider_funcao com subdep regencia
+            setRegentes(todos.filter(m => {
+              if (m.role === 'lider_geral') return true
+              const subdeps = Array.isArray(m.subdepartamento)
+                ? m.subdepartamento
+                : m.subdepartamento ? [m.subdepartamento] : []
+              return (m.role === 'lider_funcao') && subdeps.includes('regencia')
+            }))
+          })
+      }
     }
   }, [open, briefing, tema, subdep])
 
@@ -224,7 +243,46 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
               })()}
             </div>
 
-            <Input label="Responsável pelo solo" placeholder="Ex: Larissa" value={form.solo || ''} onChange={e => set('solo', e.target.value)} disabled={readOnly} />
+            {/* Regente */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--color-text-2)]">Regente</label>
+              <select
+                value={form.regente_id || ''}
+                onChange={e => {
+                  const m = regentes.find(r => r.id === e.target.value)
+                  set('regente_id', e.target.value)
+                  set('regente_nome', m?.nome || '')
+                }}
+                disabled={readOnly}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+              >
+                <option value="">Selecionar regente…</option>
+                {regentes.map(m => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Responsável pelo solo */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--color-text-2)]">Responsável pelo solo</label>
+              <select
+                value={form.solo_id || ''}
+                onChange={e => {
+                  const m = membros.find(r => r.id === e.target.value)
+                  set('solo_id', e.target.value)
+                  set('solo', m?.nome || '')
+                }}
+                disabled={readOnly}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+              >
+                <option value="">Sem solista</option>
+                {membros.map(m => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+              </select>
+            </div>
+
             {isRegente && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[var(--color-text-2)]">Instrumentos necessários</label>
