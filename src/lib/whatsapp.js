@@ -127,6 +127,11 @@ export function invalidateWhatsAppConfig() {
 
 // ── Template interpolation ─────────────────────────────────────────────────
 
+/** Retorna apenas o primeiro nome de um nome completo */
+function primeiroNome(nome) {
+  return nome ? String(nome).trim().split(/\s+/)[0] : nome
+}
+
 function interpolate(template, vars) {
   return template.replace(/\{(\w+)\}/g, (_, k) =>
     vars[k] !== undefined ? String(vars[k]) : `{${k}}`
@@ -172,7 +177,16 @@ async function sendTemplate(key, phone, vars) {
     return { error: 'no_template' }
   }
 
-  const text = interpolate(template, { ...vars, app_url: window.location.origin })
+  // Usa primeiro nome em todas as variáveis de nome
+  const resolvedVars = { ...vars }
+  for (const k of ['nome', 'solicitante', 'membro', 'enviado_por']) {
+    if (resolvedVars[k]) resolvedVars[k] = primeiroNome(resolvedVars[k])
+  }
+
+  // URL pública configurada em Configurações, ou origin atual como fallback
+  const appUrl = cfg.app_url || window.location.origin
+
+  const text = interpolate(template, { ...resolvedVars, app_url: appUrl })
   return sendMessage(phone, text)
 }
 

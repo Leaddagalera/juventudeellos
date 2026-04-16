@@ -87,6 +87,7 @@ export default function Settings() {
   const [messages,    setMessages]    = useState({})
   const [automations, setAutomations] = useState({ ...DEFAULT_AUTOMATIONS })
   const [conditions,  setConditions]  = useState({ ...DEFAULT_CONDITIONS })
+  const [appUrl,      setAppUrl]      = useState('')
 
   // ui
   const [showKey,    setShowKey]    = useState(false)
@@ -117,13 +118,14 @@ export default function Settings() {
       const { data } = await supabase
         .from('app_config')
         .select('key, value')
-        .in('key', ['whatsapp_connection', 'whatsapp_messages', 'whatsapp_automations', 'whatsapp_conditions'])
+        .in('key', ['whatsapp_connection', 'whatsapp_messages', 'whatsapp_automations', 'whatsapp_conditions', 'app_url'])
 
       const cfg = {}
       for (const row of (data || [])) cfg[row.key] = row.value
 
       if (cfg.whatsapp_connection) setConnection(cfg.whatsapp_connection)
       if (cfg.whatsapp_messages)   setMessages(cfg.whatsapp_messages)
+      if (cfg.app_url)             setAppUrl(cfg.app_url)
       setAutomations({ ...DEFAULT_AUTOMATIONS, ...(cfg.whatsapp_automations || {}) })
       setConditions({ ...DEFAULT_CONDITIONS,   ...(cfg.whatsapp_conditions  || {}) })
     } catch (err) {
@@ -545,6 +547,24 @@ export default function Settings() {
                 </div>
               )}
 
+            </div>
+          </CardSection>
+
+          <CardSection title="URL pública do sistema">
+            <div className="space-y-3">
+              <Input
+                label="URL do sistema"
+                placeholder="https://ellos-juventude.vercel.app"
+                value={appUrl}
+                onChange={e => setAppUrl(e.target.value)}
+                hint="Link enviado nas mensagens do WhatsApp para os membros acessarem o app"
+              />
+              <div className="flex items-center gap-2 pt-1">
+                <Button size="sm" onClick={() => save('app_url', appUrl)} loading={saving}>
+                  <Save size={13} />
+                  {savedKey === 'app_url' ? '✓ Salvo!' : 'Salvar URL'}
+                </Button>
+              </div>
             </div>
           </CardSection>
         </Card>
