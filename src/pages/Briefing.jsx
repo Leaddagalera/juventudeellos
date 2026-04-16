@@ -263,24 +263,44 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
               </select>
             </div>
 
-            {/* Responsável pelo solo */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[var(--color-text-2)]">Responsável pelo solo</label>
-              <select
-                value={form.solo_id || ''}
-                onChange={e => {
-                  const m = membros.find(r => r.id === e.target.value)
-                  set('solo_id', e.target.value)
-                  set('solo', m?.nome || '')
-                }}
-                disabled={readOnly}
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
-              >
-                <option value="">Sem solista</option>
-                {membros.map(m => (
-                  <option key={m.id} value={m.id}>{m.nome}</option>
-                ))}
-              </select>
+            {/* Solistas (rapaz + moça) */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--color-text-2)]">Solista (rapaz)</label>
+                <select
+                  value={form.solo_rapaz_id || ''}
+                  onChange={e => {
+                    const m = membros.find(r => r.id === e.target.value)
+                    set('solo_rapaz_id', e.target.value)
+                    set('solo_rapaz', m?.nome || '')
+                  }}
+                  disabled={readOnly}
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                >
+                  <option value="">Nenhum</option>
+                  {membros.map(m => (
+                    <option key={m.id} value={m.id}>{m.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[var(--color-text-2)]">Solista (moça)</label>
+                <select
+                  value={form.solo_moca_id || ''}
+                  onChange={e => {
+                    const m = membros.find(r => r.id === e.target.value)
+                    set('solo_moca_id', e.target.value)
+                    set('solo_moca', m?.nome || '')
+                  }}
+                  disabled={readOnly}
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--color-bg-1)] border border-[var(--color-border)] text-[var(--color-text-1)] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                >
+                  <option value="">Nenhuma</option>
+                  {membros.map(m => (
+                    <option key={m.id} value={m.id}>{m.nome}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {isRegente && (
