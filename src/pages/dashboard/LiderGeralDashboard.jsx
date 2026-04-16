@@ -14,6 +14,7 @@ import { ConfirmModal } from '../../components/ui/Modal.jsx'
 import { runScheduleEngine } from '../../lib/scheduleEngine.js'
 import { formatDateShort, formatDomingo, isBirthdayThisWeek, daysSince, subdepLabel, formatDate } from '../../lib/utils.js'
 import { notify } from '../../lib/whatsapp.js'
+import { ReacoesBar } from '../../components/ui/ReacoesBar.jsx'
 
 const SUBDEPS = ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']
 
@@ -120,7 +121,7 @@ export default function LiderGeralDashboard() {
         // Aniversariantes
         supabase.from('users').select('nome, data_nascimento').eq('ativo', true),
         // Comunicados recentes
-        supabase.from('comunicados').select('*, users(nome, foto_url)').order('criado_em', { ascending: false }).limit(3),
+        supabase.from('comunicados').select('*, users(nome, foto_url), comunicado_reacoes(emoji, user_id)').order('criado_em', { ascending: false }).limit(3),
         // Saúde dos subdeps — escalas e briefings em paralelo para cada subdep
         ...managedSubdeps.flatMap(subdep => [
           supabase.from('escalas').select('status_confirmacao, user_id').eq('ciclo_id', cicloId).eq('subdepartamento', subdep),
@@ -283,6 +284,11 @@ export default function LiderGeralDashboard() {
                       <span className="text-2xs text-white/70 whitespace-nowrap">{formatDate(c.criado_em)}</span>
                     </div>
                     <p className="text-sm text-white leading-snug">{c.texto}</p>
+                    <ReacoesBar
+                      comunicadoId={c.id}
+                      userId={profile?.id}
+                      initialReacoes={c.comunicado_reacoes || []}
+                    />
                   </div>
                 </div>
               </div>

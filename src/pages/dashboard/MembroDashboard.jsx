@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button.jsx'
 import { Modal } from '../../components/ui/Modal.jsx'
 import { Textarea } from '../../components/ui/Input.jsx'
 import { formatDomingo, subdepLabel, formatDate } from '../../lib/utils.js'
+import { ReacoesBar } from '../../components/ui/ReacoesBar.jsx'
 
 function ConfirmacaoInline({ escala, onConfirm }) {
   const statusMap = {
@@ -64,7 +65,7 @@ export default function MembroDashboard() {
         supabase.from('escalas').select('*')
           .eq('user_id', profile.id)
           .order('domingo', { ascending: true }),
-        supabase.from('comunicados').select('*, users(nome, foto_url, role)')
+        supabase.from('comunicados').select('*, users(nome, foto_url, role), comunicado_reacoes(emoji, user_id)')
           .order('criado_em', { ascending: false }).limit(5),
       ])
       setComunicados(comunicadosData || [])
@@ -176,6 +177,11 @@ export default function MembroDashboard() {
                       <span className="text-2xs text-white/70 whitespace-nowrap">{formatDate(c.criado_em)}</span>
                     </div>
                     <p className="text-sm text-white leading-snug">{c.texto}</p>
+                    <ReacoesBar
+                      comunicadoId={c.id}
+                      userId={profile?.id}
+                      initialReacoes={c.comunicado_reacoes || []}
+                    />
                   </div>
                 </div>
               </div>
