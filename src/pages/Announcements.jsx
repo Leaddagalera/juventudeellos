@@ -218,6 +218,7 @@ export default function Announcements() {
                       comunicadoId={c.id}
                       userId={profile?.id}
                       initialReacoes={c.comunicado_reacoes || []}
+                      variant="neutral"
                     />
                   </div>
                   {canManageItem(c) && (
