@@ -361,7 +361,7 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
 
 // ── Modal de briefing de ensaio ──────────────────────────────────────────────
 function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSave }) {
-  const [form,     setForm]     = useState({ hinos: [], observacoes: '' })
+  const [form,     setForm]     = useState({ hinos: [], observacoes: '', playlist_link: '' })
   const [loading,  setLoading]  = useState(false)
   const [saved,    setSaved]    = useState(false)
   const [membros,  setMembros]  = useState([])
@@ -371,8 +371,9 @@ function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSa
     if (open) {
       const base = briefing?.dados_json || {}
       setForm({
-        hinos:       Array.isArray(base.hinos) ? base.hinos : [],
-        observacoes: base.observacoes || '',
+        hinos:         Array.isArray(base.hinos) ? base.hinos : [],
+        observacoes:   base.observacoes   || '',
+        playlist_link: base.playlist_link || '',
       })
       setSaved(false)
       supabase.from('users').select('id, nome, role, subdepartamento').eq('ativo', true)
@@ -462,6 +463,34 @@ function EnsaioModal({ open, onClose, briefing, cicloId, domingo, readOnly, onSa
       )}
     >
       <div className="space-y-4">
+        {/* Link da playlist */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-[var(--color-text-2)] flex items-center gap-1.5">
+            <Youtube size={13} className="text-red-500" />
+            Link da playlist (YouTube)
+          </label>
+          <input
+            className="input-base"
+            placeholder="https://youtube.com/playlist?list=..."
+            value={form.playlist_link || ''}
+            onChange={e => setForm(f => ({ ...f, playlist_link: e.target.value }))}
+            disabled={readOnly}
+            type="url"
+            inputMode="url"
+          />
+          {form.playlist_link && (
+            <a
+              href={form.playlist_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-500 hover:text-primary-400"
+            >
+              <ExternalLink size={12} />
+              Abrir playlist no YouTube
+            </a>
+          )}
+        </div>
+
         {/* Lista de hinos */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
