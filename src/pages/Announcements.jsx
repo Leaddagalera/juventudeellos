@@ -3,6 +3,7 @@ import { Bell, Send, Pencil, Trash2, Pin, X, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, CardSection, EmptyState, Skeleton, Avatar } from '../components/ui/Card.jsx'
+import { ReacoesBar } from '../components/ui/ReacoesBar.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Select, Textarea } from '../components/ui/Input.jsx'
@@ -68,7 +69,7 @@ export default function Announcements() {
     try {
       const { data } = await supabase
         .from('comunicados')
-        .select('*, users(nome, foto_url)')
+        .select('*, users(nome, foto_url), comunicado_reacoes(emoji, user_id)')
         .order('fixado_ate', { ascending: false, nullsFirst: false })
         .order('criado_em',  { ascending: false })
         .limit(50)
@@ -213,6 +214,11 @@ export default function Announcements() {
                       <span className="text-2xs text-[var(--color-text-3)] ml-auto">{formatDate(c.criado_em)}</span>
                     </div>
                     <p className="text-sm text-[var(--color-text-2)] mt-1 leading-snug">{c.texto}</p>
+                    <ReacoesBar
+                      comunicadoId={c.id}
+                      userId={profile?.id}
+                      initialReacoes={c.comunicado_reacoes || []}
+                    />
                   </div>
                   {canManageItem(c) && (
                     <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">

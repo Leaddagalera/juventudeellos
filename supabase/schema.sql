@@ -154,6 +154,16 @@ create table if not exists public.comunicados (
   criado_em     timestamptz not null default now()
 );
 
+-- ── REAÇÕES DE COMUNICADOS ───────────────────────────────────────────────────
+create table if not exists public.comunicado_reacoes (
+  id            uuid primary key default uuid_generate_v4(),
+  comunicado_id uuid not null references public.comunicados(id) on delete cascade,
+  user_id       uuid not null references public.users(id) on delete cascade,
+  emoji         text not null check (emoji in ('🙏','🔥','❤️','👏','😂')),
+  created_at    timestamptz not null default now(),
+  unique (comunicado_id, user_id, emoji)
+);
+
 -- ── NOTIFICAÇÕES LOG ─────────────────────────────────────────────────────────
 create table if not exists public.notificacoes_log (
   id          uuid primary key default uuid_generate_v4(),
@@ -177,7 +187,8 @@ alter table public.escalas        enable row level security;
 alter table public.trocas         enable row level security;
 alter table public.visitantes     enable row level security;
 alter table public.conteudo_login enable row level security;
-alter table public.comunicados    enable row level security;
+alter table public.comunicados          enable row level security;
+alter table public.comunicado_reacoes   enable row level security;
 alter table public.notificacoes_log enable row level security;
 
 -- Helper: get current user's role
@@ -268,6 +279,11 @@ create policy "Media: write"       on public.conteudo_login for all
 -- COMUNICADOS
 create policy "Com: all read"    on public.comunicados for select using (auth.uid() is not null);
 create policy "Com: lider write" on public.comunicados for insert  with check (public.is_lider());
+
+-- COMUNICADO REAÇÕES
+create policy "reacoes_select" on public.comunicado_reacoes for select using (auth.uid() is not null);
+create policy "reacoes_insert" on public.comunicado_reacoes for insert with check (auth.uid() = user_id);
+create policy "reacoes_delete" on public.comunicado_reacoes for delete using (auth.uid() = user_id);
 
 -- NOTIFICACOES_LOG — lider only
 create policy "Log: lider"

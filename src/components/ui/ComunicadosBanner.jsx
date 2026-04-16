@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Megaphone, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase.js'
 import { subdepLabel } from '../../lib/utils.js'
+import { ReacoesBar } from './ReacoesBar.jsx'
 
 const DEST_COLORS = {
   todos:    { bg: 'from-blue-600 to-blue-500',    text: 'text-white', badge: 'bg-white/20 text-white', label: 'Todos' },
@@ -48,7 +49,7 @@ export function ComunicadosBanner({ profile, isLider = false }) {
 
       const { data } = await supabase
         .from('comunicados')
-        .select('*, users(nome, foto_url)')
+        .select('*, users(nome, foto_url), comunicado_reacoes(emoji, user_id)')
         .in('destinatario', destFiltros)
         .order('criado_em', { ascending: false })
         .limit(5)
@@ -108,6 +109,11 @@ export function ComunicadosBanner({ profile, isLider = false }) {
                   <p className={`text-sm leading-snug ${cor.text} opacity-95`}>
                     {c.texto}
                   </p>
+                  <ReacoesBar
+                    comunicadoId={c.id}
+                    userId={profile?.id}
+                    initialReacoes={c.comunicado_reacoes || []}
+                  />
                 </div>
               </div>
             </div>
