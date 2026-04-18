@@ -118,6 +118,7 @@ create table if not exists public.trocas (
 create table if not exists public.visitantes (
   id                     uuid primary key default uuid_generate_v4(),
   nome                   text not null,
+  telefone               text,
   idade                  integer,
   estado_civil           text,
   endereco               text,

@@ -30,6 +30,15 @@ const EMPTY_FORM = {
   telefone: '', igreja: '', motivo: '',
 }
 
+function maskPhone(value) {
+  const d = value.replace(/\D/g, '').slice(0, 11)
+  if (d.length === 0) return ''
+  if (d.length <= 2)  return `(${d}`
+  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
+}
+
 function toLocalDate(isoStr) {
   if (!isoStr) return ''
   const [y, m, d] = isoStr.split('-')
@@ -51,8 +60,10 @@ function VisitorForm({ form, onChange }) {
       <Input label="Nome completo *" placeholder="Nome do visitante"
         value={form.nome} onChange={e => set('nome', e.target.value)} />
       <div className="grid grid-cols-2 gap-2">
-        <Input label="Telefone / WhatsApp" placeholder="(xx) 9xxxx-xxxx" type="tel"
-          value={form.telefone} onChange={e => set('telefone', e.target.value)} />
+        <Input label="Telefone / WhatsApp" placeholder="(11) 99999-9999" type="tel"
+          inputMode="numeric"
+          value={form.telefone}
+          onChange={e => set('telefone', maskPhone(e.target.value))} />
         <Input label="Idade" type="number" placeholder="Ex: 22"
           value={form.idade} onChange={e => set('idade', e.target.value)} />
       </div>
@@ -129,9 +140,10 @@ export default function Visitors() {
       const isRecorrente = prev && prev.length > 0
       const { error } = await supabase.from('visitantes').insert({
         ...regForm,
-        idade: regForm.idade ? Number(regForm.idade) : null,
-        data_visita: today,
+        idade:                 regForm.idade ? Number(regForm.idade) : null,
+        data_visita:           today,
         status_acompanhamento: isRecorrente ? 'recorrente' : 'novo',
+        registrado_por:        profile?.id ?? null,
       })
       if (error) throw error
       if (isRecorrente) {
@@ -158,7 +170,7 @@ export default function Visitors() {
       idade:        v.idade        ? String(v.idade) : '',
       estado_civil: v.estado_civil || '',
       endereco:     v.endereco     || '',
-      telefone:     v.telefone     || '',
+      telefone:     maskPhone(v.telefone || ''),
       igreja:       v.igreja       || '',
       motivo:       v.motivo       || '',
     })

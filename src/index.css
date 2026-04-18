@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Previne zoom automático do iOS Safari ao focar inputs (exige font-size >= 16px) */
+@media (hover: none) and (pointer: coarse) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 @layer base {
   :root {
     --color-bg:        #f8fafc;

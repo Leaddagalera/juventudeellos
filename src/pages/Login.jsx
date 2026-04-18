@@ -314,7 +314,7 @@ const inputStyle = {
   border: '1px solid rgba(255,255,255,0.2)',
   borderRadius: 12,
   color: 'white',
-  fontSize: 15,
+  fontSize: 16,
   outline: 'none',
   boxSizing: 'border-box',
 }
