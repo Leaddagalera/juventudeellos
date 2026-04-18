@@ -77,6 +77,18 @@ export const DEFAULT_MESSAGES = {
 
   cicloFasePendencia:
     '⚠️ *{nome}*, ainda há *{tipo}* pendente(s) para o ciclo.\n\nO ciclo só avançará após a resolução. Acesse agora: {app_url}',
+
+  comunicadoPublicado:
+    '📢 *Novo comunicado — Ellos Juventude*\n\n_{texto_preview}_\n\nDestinado a: *{destinatario}*\n\nVeja no sistema: {app_url}',
+
+  briefingPreenchido:
+    '✅ *Briefing preenchido*\n\n*{autor}* preencheu o briefing de *{subdep}* para o domingo *{domingo}*.\n\nAcesse o painel: {app_url}',
+
+  visitanteIntegrado:
+    '🎉 *Visitante integrado!*\n\n*{visitante}* foi marcado(a) como *Integrado(a)*.\nBenção! Continue o acompanhamento pastoral. 🙏',
+
+  relatorioSemanal:
+    '📊 *Relatório semanal — Ellos Juventude*\n\n👥 Membros ativos: *{ativos}*\n✅ Confirmações: *{confirmados}/{escalados}*\n👤 Visitantes na semana: *{visitantes}*\n🔄 Trocas: *{trocas}*\n\nPainel completo: {app_url}',
 }
 
 export const DEFAULT_AUTOMATIONS = {
@@ -102,6 +114,10 @@ export const DEFAULT_AUTOMATIONS = {
   membroAprovado:           true,
   cicloFaseAgradecimento:   true,
   cicloFasePendencia:       true,
+  comunicadoPublicado:  true,
+  briefingPreenchido:   true,
+  visitanteIntegrado:   true,
+  relatorioSemanal:     false,
 }
 
 export const DEFAULT_CONDITIONS = {
@@ -270,4 +286,16 @@ export const notify = {
 
   cicloFasePendencia: (phone, nome, tipo) =>
     sendTemplate('cicloFasePendencia', phone, { nome, tipo }),
+
+  comunicadoPublicado: (phone, texto_preview, destinatario) =>
+    sendTemplate('comunicadoPublicado', phone, { texto_preview, destinatario }),
+
+  briefingPreenchido: (phone, autor, subdep, domingo) =>
+    sendTemplate('briefingPreenchido', phone, { autor, subdep, domingo }),
+
+  visitanteIntegrado: (phone, visitante) =>
+    sendTemplate('visitanteIntegrado', phone, { visitante }),
+
+  relatorioSemanal: (phone, ativos, confirmados, escalados, visitantes, trocas) =>
+    sendTemplate('relatorioSemanal', phone, { ativos, confirmados, escalados, visitantes, trocas }),
 }

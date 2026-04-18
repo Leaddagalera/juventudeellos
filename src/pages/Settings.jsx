@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Wifi, MessageSquare, Zap, SlidersHorizontal, ShieldCheck,
   Save, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff,
-  RotateCcw, Loader2, Settings2, Info, QrCode, RefreshCw, Unlink, CalendarDays,
+  RotateCcw, Loader2, Settings2, Info, QrCode, RefreshCw, Unlink, CalendarDays, Bell,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -33,8 +33,9 @@ const TABS = [
   { id: 'automacoes', label: 'Automações', icon: Zap },
   { id: 'condicoes',  label: 'Condições',  icon: SlidersHorizontal },
   { id: 'perfis',     label: 'Perfis',     icon: ShieldCheck },
-  { id: 'eventos',    label: 'Eventos',    icon: CalendarDays },
-  { id: 'modo_dev',   label: 'Dev',        icon: Settings2 },
+  { id: 'eventos',       label: 'Eventos',       icon: CalendarDays },
+  { id: 'notificacoes', label: 'Notificações', icon: Bell },
+  { id: 'modo_dev',     label: 'Dev',           icon: Settings2 },
 ]
 
 export const MSG_META = {
@@ -60,6 +61,10 @@ export const MSG_META = {
   membroAprovado:           { label: 'Cadastro Aprovado — Membro',            vars: ['{nome}', '{app_url}'] },
   cicloFaseAgradecimento:   { label: 'Ciclo — Fase Concluída (Agradecimento)', vars: ['{nome}', '{tipo}', '{app_url}'] },
   cicloFasePendencia:       { label: 'Ciclo — Fase com Pendência (Cobrança)', vars: ['{nome}', '{tipo}', '{app_url}'] },
+  comunicadoPublicado: { label: 'Comunicado Publicado',        vars: ['{texto_preview}', '{destinatario}', '{app_url}'] },
+  briefingPreenchido:  { label: 'Briefing Preenchido',         vars: ['{autor}', '{subdep}', '{domingo}', '{app_url}'] },
+  visitanteIntegrado:  { label: 'Visitante Integrado',         vars: ['{visitante}'] },
+  relatorioSemanal:    { label: 'Relatório Semanal (segunda)', vars: ['{ativos}', '{confirmados}', '{escalados}', '{visitantes}', '{trocas}', '{app_url}'] },
 }
 
 const AUTOMATION_GROUPS = [
@@ -73,6 +78,9 @@ const AUTOMATION_GROUPS = [
   { label: 'Pastoral — Visitas e Tarjas',         type: 'event',     keys: ['segundaVisita', 'tarjaNegativaAlerta'] },
   { label: 'Pastoral — Aniversários',             type: 'scheduled', keys: ['aniversario'] },
   { label: 'Sistema',                             type: 'event',     keys: ['novoCadastroPendente', 'midiaPendente', 'membroAprovado'] },
+  { label: 'Notificações — Publicações',       type: 'event',     keys: ['comunicadoPublicado', 'briefingPreenchido'] },
+  { label: 'Notificações — Pastoral',          type: 'event',     keys: ['visitanteIntegrado'] },
+  { label: 'Notificações — Relatório Semanal', type: 'scheduled', keys: ['relatorioSemanal'] },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -912,6 +920,112 @@ export default function Settings() {
           </div>
           <EventsManager />
         </Card>
+      )}
+
+      {/* ── TAB: NOTIFICAÇÕES ── */}
+      {tab === 'notificacoes' && (
+        <div className="space-y-3">
+
+          <div className="flex items-start gap-2 rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 p-3">
+            <Bell size={14} className="text-violet-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
+              Configure quais eventos disparam notificações automáticas via WhatsApp para os líderes.
+              Personalize as mensagens na aba <strong>Mensagens</strong>.
+            </p>
+          </div>
+
+          {/* Publicações */}
+          <Card>
+            <CardSection title={<div className="flex items-center gap-2"><span>Publicações</span><span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-400">⚡ Imediato</span></div>}>
+              <div className="divide-y divide-[var(--color-border)]">
+                {[
+                  { key: 'comunicadoPublicado', label: 'Comunicado publicado',  desc: 'Notifica os outros líderes quando um novo comunicado for publicado' },
+                  { key: 'briefingPreenchido',  label: 'Briefing submetido',    desc: 'Avisa o Líder Geral quando um briefing de culto ou ensaio for preenchido' },
+                ].map(({ key, label, desc }) => {
+                  const enabled = automations[key] !== undefined ? automations[key] : true
+                  return (
+                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0 pr-4">
+                        <p className="text-sm text-[var(--color-text-1)]">{label}</p>
+                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                      </div>
+                      <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
+                    </div>
+                  )
+                })}
+              </div>
+            </CardSection>
+          </Card>
+
+          {/* Pastoral */}
+          <Card>
+            <CardSection title={<div className="flex items-center gap-2"><span>Pastoral</span><span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-400">⚡ Imediato</span></div>}>
+              <div className="divide-y divide-[var(--color-border)]">
+                {[
+                  { key: 'visitanteIntegrado',  label: 'Visitante integrado',      desc: 'Notifica o Líder Geral quando um visitante for marcado como Integrado' },
+                  { key: 'segundaVisita',        label: '2ª visita de visitante',   desc: 'Notifica quando o mesmo visitante retornar pela segunda vez' },
+                  { key: 'tarjaNegativaAlerta',  label: 'Alerta de tarja negativa', desc: 'Avisa quando um membro está há muito tempo sem evolução espiritual' },
+                  { key: 'aniversario',          label: 'Aniversário de membro',    desc: 'Lembrete de aniversário dos membros enviado ao líder' },
+                ].map(({ key, label, desc }) => {
+                  const enabled = automations[key] !== undefined ? automations[key] : true
+                  return (
+                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0 pr-4">
+                        <p className="text-sm text-[var(--color-text-1)]">{label}</p>
+                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                      </div>
+                      <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
+                    </div>
+                  )
+                })}
+              </div>
+            </CardSection>
+          </Card>
+
+          {/* Relatório Semanal */}
+          <Card>
+            <CardSection title={<div className="flex items-center gap-2"><span>Relatório</span><span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">🕐 Agendado</span></div>}>
+              <div className="divide-y divide-[var(--color-border)]">
+                {[
+                  { key: 'relatorioSemanal', label: 'Relatório de segunda-feira', desc: 'Envia ao Líder Geral toda segunda-feira: membros ativos, confirmações, visitantes e trocas da semana' },
+                ].map(({ key, label, desc }) => {
+                  const enabled = automations[key] !== undefined ? automations[key] : false
+                  return (
+                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0 pr-4">
+                        <p className="text-sm text-[var(--color-text-1)]">{label}</p>
+                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                      </div>
+                      <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
+                    </div>
+                  )
+                })}
+              </div>
+            </CardSection>
+          </Card>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="secondary" size="sm"
+              onClick={() => {
+                const keys = ['comunicadoPublicado','briefingPreenchido','visitanteIntegrado','relatorioSemanal','segundaVisita','tarjaNegativaAlerta','aniversario']
+                setAutomations(a => ({ ...a, ...Object.fromEntries(keys.map(k => [k, true])) }))
+              }}>
+              Ativar todas
+            </Button>
+            <Button variant="secondary" size="sm"
+              onClick={() => {
+                const keys = ['comunicadoPublicado','briefingPreenchido','visitanteIntegrado','relatorioSemanal','segundaVisita','tarjaNegativaAlerta','aniversario']
+                setAutomations(a => ({ ...a, ...Object.fromEntries(keys.map(k => [k, false])) }))
+              }}>
+              Desativar todas
+            </Button>
+            <Button className="ml-auto" onClick={() => save('whatsapp_automations', automations)} loading={saving}>
+              <Save size={14} />
+              {savedKey === 'whatsapp_automations' ? '✓ Salvo!' : 'Salvar notificações'}
+            </Button>
+          </div>
+
+        </div>
       )}
 
     </div>

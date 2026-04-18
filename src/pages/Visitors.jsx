@@ -216,8 +216,18 @@ export default function Visitors() {
   // ── Status update ────────────────────────────────────────────────────────────
 
   async function updateStatus(id, status) {
-    await supabase.from('visitantes').update({ status_acompanhamento: status }).eq('id', id)
+    const { error } = await supabase.from('visitantes').update({ status_acompanhamento: status }).eq('id', id)
+    if (error) { console.error('[Visitors] updateStatus', error); return }
     setVisitors(prev => prev.map(v => v.id === id ? { ...v, status_acompanhamento: status } : v))
+
+    if (status === 'integrado') {
+      const visitanteObj = visitors.find(v => v.id === id)
+      const { data: lider } = await supabase
+        .from('users').select('whatsapp').eq('role', 'lider_geral').eq('ativo', true).limit(1).maybeSingle()
+      if (lider?.whatsapp && visitanteObj) {
+        await notify.visitanteIntegrado(lider.whatsapp, visitanteObj.nome)
+      }
+    }
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────

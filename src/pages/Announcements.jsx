@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { Select, Textarea } from '../components/ui/Input.jsx'
 import { Modal, ConfirmModal } from '../components/ui/Modal.jsx'
 import { formatDate } from '../lib/utils.js'
+import { notify } from '../lib/whatsapp.js'
 
 const DEST_OPTS = [
   { value: 'todos',    label: 'Todos os membros' },
@@ -98,6 +99,19 @@ export default function Announcements() {
       if (error) throw error
       setTexto(''); setDest('todos'); setFixDias('')
       loadComunicados()
+      // Notificar líderes sobre novo comunicado (exceto o autor)
+      const { data: lideres } = await supabase
+        .from('users')
+        .select('nome, whatsapp')
+        .in('role', ['lider_geral', 'lider_funcao'])
+        .neq('id', profile.id)
+        .eq('ativo', true)
+        .not('whatsapp', 'is', null)
+      const preview = texto.trim().slice(0, 100) + (texto.trim().length > 100 ? '...' : '')
+      const destLabel = DEST_OPTS.find(o => o.value === dest)?.label || dest
+      for (const lider of (lideres || [])) {
+        await notify.comunicadoPublicado(lider.whatsapp, preview, destLabel)
+      }
     } catch (err) {
       alert(err.message)
     } finally {
