@@ -728,15 +728,16 @@ export default function Briefing() {
 
   // Briefings só são editáveis durante as fases de preenchimento,
   // e cada fase libera apenas o papel correto.
+  // lider_funcao só edita o subdep que LIDERA (subdep_lider), não todos que serve.
   const canEdit = (subdep) => {
     if (!ciclo) return false
     const { status } = ciclo
     if (status !== 'briefing_regente' && status !== 'briefing_lider') return false
     if (isLiderGeral) return true
     // briefing_regente → somente regentes editam 'regencia'
-    if (status === 'briefing_regente') return subdep === 'regencia' && mySubdeps.includes('regencia')
-    // briefing_lider → lider_funcao edita seus subdeps
-    if (status === 'briefing_lider') return isLiderFuncao && mySubdeps.includes(subdep)
+    if (status === 'briefing_regente') return subdep === 'regencia' && profile?.subdep_lider === 'regencia'
+    // briefing_lider → lider_funcao edita APENAS o subdep que lidera
+    if (status === 'briefing_lider') return isLiderFuncao && profile?.subdep_lider === subdep
     return false
   }
 
@@ -744,11 +745,11 @@ export default function Briefing() {
   const getEnsaioBriefing = (domingo) =>
     briefings.find(b => b.domingo === domingo && b.tipo === 'ensaio')
 
-  // Ensaio: editável até o dia do domingo (não depende da fase do ciclo)
+  // Ensaio: editável até o dia do domingo — somente líder da regência
   const canEditEnsaio = (domingo) => {
     if (!ciclo) return false
     if (isLiderGeral) return true
-    if (isLiderFuncao && (profile?.subdep_lider === 'regencia' || mySubdeps.includes('regencia'))) {
+    if (isLiderFuncao && profile?.subdep_lider === 'regencia') {
       const sundayDate = new Date(domingo + 'T23:59:59')
       return sundayDate >= new Date()
     }
