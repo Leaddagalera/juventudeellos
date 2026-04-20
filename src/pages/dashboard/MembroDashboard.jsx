@@ -180,12 +180,6 @@ export default function MembroDashboard() {
   const escalasPendConf = escalasFuturas.filter(e => e.status_confirmacao === 'pendente')
 
   // Progresso do ciclo — baseado na fase atual, não em dias de serviço
-  const cycleDay = ciclo
-    ? Math.floor((Date.now() - new Date(ciclo.inicio + 'T00:00:00').getTime()) / 86_400_000) + 1
-    : null
-  const cycleTotalDays = ciclo
-    ? Math.max(1, Math.round((new Date(ciclo.fim + 'T00:00:00') - new Date(ciclo.inicio + 'T00:00:00')) / 86_400_000))
-    : 45
   const PHASE_PROGRESS = {
     briefing_regente: 10,
     briefing_lider:   22,
@@ -196,6 +190,14 @@ export default function MembroDashboard() {
     encerrado:        100,
   }
   const cycleProgress = ciclo ? (PHASE_PROGRESS[ciclo.status] ?? 0) : 0
+
+  // Days until service
+  const daysUntilService = ciclo
+    ? Math.ceil((new Date(ciclo.inicio + 'T00:00:00').getTime() - Date.now()) / 86_400_000)
+    : null
+  const cycleProgressLabel = ciclo
+    ? (daysUntilService > 0 ? `${daysUntilService}d para o serviço · ${cycleProgress}%` : `${cycleProgress}%`)
+    : null
 
   // Status de disponibilidade conforme fase do ciclo
   const faseAntesDsip    = ['briefing_regente', 'briefing_lider'].includes(ciclo?.status)
@@ -236,9 +238,7 @@ export default function MembroDashboard() {
             <span className="text-xs font-medium text-[var(--color-text-2)]">
               Ciclo — {new Date(ciclo.inicio).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
             </span>
-            <span className="text-xs text-[var(--color-text-3)]">
-              {cycleDay > 0 ? `Dia ${cycleDay} de ${cycleTotalDays}` : `Início em ${Math.abs(cycleDay - 1)}d`}
-            </span>
+            <span className="text-xs text-[var(--color-text-3)]">{cycleProgressLabel}</span>
           </div>
           <div className="cycle-bar">
             <div className="cycle-bar-fill" style={{ width: `${cycleProgress}%` }} />

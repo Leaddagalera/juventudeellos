@@ -220,13 +220,13 @@ export default function LiderGeralDashboard() {
   }
   const cycleProgress = ciclo ? (PHASE_PROGRESS[ciclo.status] ?? 0) : 0
 
-  // Cycle day (used only for the date label)
-  const cycleDay = ciclo
-    ? Math.floor((Date.now() - new Date(ciclo.inicio + 'T00:00:00').getTime()) / 86_400_000) + 1
+  // Days until service (positive = future, 0 = today, negative = past)
+  const daysUntilService = ciclo
+    ? Math.ceil((new Date(ciclo.inicio + 'T00:00:00').getTime() - Date.now()) / 86_400_000)
     : null
-  const cycleTotalDays = ciclo
-    ? Math.max(1, Math.round((new Date(ciclo.fim + 'T00:00:00') - new Date(ciclo.inicio + 'T00:00:00')) / 86_400_000))
-    : 45
+  const cycleProgressLabel = ciclo
+    ? (daysUntilService > 0 ? `${daysUntilService}d para o serviço · ${cycleProgress}%` : `${cycleProgress}%`)
+    : null
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
@@ -238,7 +238,7 @@ export default function LiderGeralDashboard() {
           </h2>
           {ciclo ? (
             <p className="text-sm text-[var(--color-text-3)]">
-              Ciclo ativo · {cycleDay > 0 ? `Dia ${cycleDay} de ${cycleTotalDays}` : `Serviço em ${Math.abs(cycleDay - 1)}d`}
+              Ciclo ativo · {daysUntilService > 0 ? `Serviço em ${daysUntilService}d` : daysUntilService === 0 ? 'Serviço hoje' : 'Ciclo em andamento'}
             </p>
           ) : (
             <p className="text-sm text-[var(--color-text-3)]">Nenhum ciclo ativo</p>
@@ -257,7 +257,7 @@ export default function LiderGeralDashboard() {
             <span className="text-xs font-medium text-[var(--color-text-2)]">
               Progresso do ciclo — {new Date(ciclo.inicio).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
             </span>
-            <span className="text-xs text-[var(--color-text-3)]">{cycleProgress}%</span>
+            <span className="text-xs text-[var(--color-text-3)]">{cycleProgressLabel}</span>
           </div>
           <div className="cycle-bar">
             <div className="cycle-bar-fill" style={{ width: `${cycleProgress}%` }} />
