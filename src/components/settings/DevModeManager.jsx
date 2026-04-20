@@ -548,6 +548,9 @@ export default function DevModeManager() {
   // Format: { cycleId, phaseLabel, preflightFail?, currentHour?, windowStart?, windowEnd?,
   //           sent, demo, skipped, errors, recipients: [{nome, status, reason?}] }
 
+  // ── Resend notifications state
+  const [notifying, setNotifying] = useState(false)
+
   // ── Schedule generator state
   const [generating, setGenerating] = useState(false)
   const [genResult,  setGenResult]  = useState(null)   // { cicloId, count } | null
@@ -590,6 +593,15 @@ export default function DevModeManager() {
     const result = await notificarCiclo(cycle.id, next, cycle).catch(e => ({ error: e.message }))
     setNotifResult({ cycleId: cycle.id, phaseLabel: STATUS_META[next]?.label, ...result })
     await loadCycles()
+  }
+
+  const reenviarNotificacoes = async (cycle) => {
+    if (!confirm(`Reenviar notificações da fase "${STATUS_META[cycle.status]?.label}" sem avançar o ciclo?`)) return
+    setNotifying(true)
+    setNotifResult(null)
+    const result = await notificarCiclo(cycle.id, cycle.status, cycle).catch(e => ({ error: e.message }))
+    setNotifResult({ cycleId: cycle.id, phaseLabel: STATUS_META[cycle.status]?.label + ' (reenvio)', ...result })
+    setNotifying(false)
   }
 
   // ── Schedule generator ───────────────────────────────────────────────────
@@ -850,6 +862,17 @@ export default function DevModeManager() {
                           >
                             <Edit2 size={12} /> Editar
                           </Button>
+                          {['briefing_regente','briefing_lider','disponibilidade','escala_publicada','confirmacoes'].includes(cy.status) && (
+                            <Button
+                              size="sm" variant="secondary"
+                              onClick={() => reenviarNotificacoes(cy)}
+                              loading={notifying}
+                              disabled={notifying}
+                              className="flex-1"
+                            >
+                              <RefreshCw size={12} /> Reenviar notificações
+                            </Button>
+                          )}
                           {['disponibilidade','briefing_lider','briefing_regente'].includes(cy.status) && (
                             <Button
                               size="sm" variant="secondary"
