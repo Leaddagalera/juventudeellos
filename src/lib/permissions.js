@@ -75,7 +75,7 @@ export const DEFAULT_PERMISSIONS = {
     campos_visiveis: ['historico_servico', 'escala_geral', 'briefing_completo', 'saude_subdeps'],
   },
   membro_serve: {
-    telas:           ['dashboard', 'escalas', 'disponibilidade'],
+    telas:           ['dashboard', 'escalas', 'briefings', 'disponibilidade'],
     acoes:           ['confirmar_presenca', 'solicitar_troca'],
     campos_visiveis: ['historico_servico', 'escala_propria'],
   },

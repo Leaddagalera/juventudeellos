@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Plus, Trash2, Music, Youtube, ExternalLink, FileText, Upload, Loader2 } from 'lucide-react'
+import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Eye, Plus, Trash2, Music, Youtube, ExternalLink, FileText, Upload, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, EmptyState, Skeleton } from '../components/ui/Card.jsx'
@@ -844,7 +844,7 @@ function GridCell({ briefing, onClick, readOnly }) {
         : <AlertCircle size={15} className="text-[var(--color-text-3)]" />
       }
       <span className={`text-xs font-medium ${filled ? 'text-success-500' : 'text-[var(--color-text-3)]'}`}>
-        {filled ? 'OK' : 'Preencher'}
+        {filled ? (readOnly ? 'Ver' : 'OK') : (readOnly ? 'Ver' : 'Preencher')}
       </span>
     </button>
   )
@@ -855,12 +855,14 @@ export default function Briefing() {
   const { profile, isLiderGeral, isLiderFuncao } = useAuth()
   const { config: sysConfig } = useSysConfig()
 
+  const isMembroServe = profile?.role === 'membro_serve'
+
   // Calcular subdeps visíveis ANTES dos useStates para poder usar no initializer
   const mySubdeps = Array.isArray(profile?.subdepartamento)
     ? profile.subdepartamento
     : profile?.subdepartamento ? [profile.subdepartamento] : []
 
-  // lider_funcao também enxerga o subdep que lidera
+  // lider_funcao e membro_serve enxergam apenas seus subdeps
   const visibleSubdeps = isLiderGeral
     ? SUBDEPS
     : SUBDEPS.filter(s => {
@@ -957,6 +959,7 @@ export default function Briefing() {
   // lider_funcao só edita o subdep que LIDERA (subdep_lider), não todos que serve.
   const canEdit = (subdep) => {
     if (!ciclo) return false
+    if (isMembroServe) return false
     const { status } = ciclo
     if (status !== 'briefing_regente' && status !== 'briefing_lider') return false
     if (isLiderGeral) return true
@@ -971,9 +974,10 @@ export default function Briefing() {
   const getEnsaioBriefing = (domingo) =>
     briefings.find(b => b.domingo === domingo && b.tipo === 'ensaio')
 
-  // Ensaio: editável até o dia do domingo — somente líder da regência
+  // Ensaio: editável até o dia do domingo — somente líder da regência; membro_serve só visualiza
   const canEditEnsaio = (domingo) => {
     if (!ciclo) return false
+    if (isMembroServe) return false
     if (isLiderGeral) return true
     if (isLiderFuncao && profile?.subdep_lider === 'regencia') {
       const sundayDate = new Date(domingo + 'T23:59:59')
@@ -982,11 +986,11 @@ export default function Briefing() {
     return false
   }
 
-  // Domingos de ensaio dentro do ciclo (2º domingo do mês)
+  // Domingos de ensaio dentro do ciclo
   const ensaioDomingos = domingos.filter(d => isEnsaioSunday(d, ensaioWeek))
 
-  // Aba Ensaio visível para quem tem acesso a regência
-  const showEnsaioTab = isLiderGeral || mySubdeps.includes('regencia') || profile?.subdep_lider === 'regencia'
+  // Aba Ensaio visível para todos (todos participam do ensaio)
+  const showEnsaioTab = isLiderGeral || isMembroServe || mySubdeps.includes('regencia') || profile?.subdep_lider === 'regencia'
 
   const isEditPhase = ciclo && ['briefing_regente', 'briefing_lider'].includes(ciclo.status)
 
@@ -1019,6 +1023,7 @@ export default function Briefing() {
         const b = getBriefing(domingo, subdep)
         const filled = b && Object.keys(b.dados_json || {}).length > 0
         const tema = sundayTheme(domingo)
+        const editable = canEdit(subdep)
         return (
           <button
             key={domingo}
@@ -1031,7 +1036,10 @@ export default function Briefing() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant={filled ? 'green' : 'amber'}>{filled ? 'Preenchido' : 'Pendente'}</Badge>
-              <Edit2 size={13} className="text-[var(--color-text-3)]" />
+              {editable
+                ? <Edit2 size={13} className="text-[var(--color-text-3)]" />
+                : <Eye size={13} className="text-[var(--color-text-3)]" />
+              }
             </div>
           </button>
         )
@@ -1066,6 +1074,12 @@ export default function Briefing() {
         <div className="alert-strip info">
           <AlertCircle size={13} />
           <span>Aguardando preenchimento das Regentes. Briefings em leitura para os demais.</span>
+        </div>
+      )}
+      {isMembroServe && (
+        <div className="alert-strip info">
+          <Eye size={13} />
+          <span>Somente visualização — apenas líderes podem editar briefings.</span>
         </div>
       )}
 
