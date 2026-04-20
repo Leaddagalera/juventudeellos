@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Save, Clock, CheckCircle2, XCircle, Circle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Save, Clock, CheckCircle2, XCircle, Circle, Music } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, EmptyState, Skeleton } from '../components/ui/Card.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { formatDomingo, subdepLabel } from '../lib/utils.js'
 import { cn } from '../lib/utils.js'
+import { isEnsaioSunday } from '../lib/scheduleEngine.js'
+import { useSysConfig } from '../lib/sysConfig.js'
 
 // ── Calendar helpers ──────────────────────────────────────────────────────────
 
@@ -77,6 +79,7 @@ function briefContent(subdep, dados, domingo) {
 
 export default function Availability() {
   const { profile } = useAuth()
+  const { config: sysConfig } = useSysConfig()
 
   const [ciclo,        setCiclo]        = useState(null)
   const [domingos,     setDomingos]     = useState([])
@@ -97,6 +100,16 @@ export default function Availability() {
     if (!s) return []
     return Array.isArray(s) ? s.filter(Boolean) : [s].filter(Boolean)
   })()
+
+  // Returns subdeps active for a given Sunday, respecting the ensaio rule:
+  // on the ensaio Sunday only 'regencia' serves — everyone else has no slots.
+  const activeSubdepsForDay = (dateStr) => {
+    const ensaioWeek = sysConfig?.ensaio_week ?? 4
+    if (isEnsaioSunday(dateStr, ensaioWeek)) {
+      return mySubdeps.includes('regencia') ? ['regencia'] : []
+    }
+    return mySubdeps
+  }
 
   useEffect(() => {
     if (!profile?.id) return
@@ -203,16 +216,20 @@ export default function Availability() {
   }
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  // Total slots = sundays × subdeps; filled = those with a non-null answer
-  const totalSlots  = domingos.length * mySubdeps.length
-  const filledSlots = Object.values(disponibilis).filter(v => v !== null).length
+  // Total slots = sum of active subdeps per sunday (ensaio sundays may have fewer)
+  const totalSlots  = domingos.reduce((acc, d) => acc + activeSubdepsForDay(d).length, 0)
+  const filledSlots = domingos.reduce((acc, d) => {
+    return acc + activeSubdepsForDay(d).filter(s => disponibilis[`${d}:${s}`] !== null).length
+  }, 0)
   const pct = totalSlots > 0 ? Math.round((filledSlots / totalSlots) * 100) : 0
 
   // Calendar colour: green if ALL subdeps available, red if ALL unavailable,
   // yellow if partial, grey if unset
   function dayCalendarState(dateStr) {
-    if (!domingos.includes(dateStr) || mySubdeps.length === 0) return 'none'
-    const vals = mySubdeps.map(s => disponibilis[`${dateStr}:${s}`])
+    if (!domingos.includes(dateStr)) return 'none'
+    const active = activeSubdepsForDay(dateStr)
+    if (active.length === 0) return 'ensaio'
+    const vals = active.map(s => disponibilis[`${dateStr}:${s}`])
     if (vals.every(v => v === true))  return 'available'
     if (vals.every(v => v === false)) return 'unavailable'
     if (vals.some(v => v !== null))   return 'partial'
@@ -317,7 +334,8 @@ export default function Availability() {
 
             let bg = '', fg = ''
             if (isEvent) {
-              if (state === 'available')   { bg = 'bg-success-500 hover:bg-success-600'; fg = 'text-white' }
+              if (state === 'ensaio')      { bg = 'bg-purple-500/20 hover:bg-purple-500/30'; fg = 'text-purple-400' }
+              else if (state === 'available')   { bg = 'bg-success-500 hover:bg-success-600'; fg = 'text-white' }
               else if (state === 'unavailable') { bg = 'bg-danger-500 hover:bg-danger-600'; fg = 'text-white' }
               else if (state === 'partial') { bg = 'bg-warning-500/80 hover:bg-warning-500'; fg = 'text-white' }
               else if (isSel)  { bg = 'bg-primary-600'; fg = 'text-white' }
@@ -353,6 +371,7 @@ export default function Availability() {
             { color: 'bg-danger-500',   label: 'Indisponível' },
             { color: 'bg-warning-500',  label: 'Parcial' },
             { color: 'bg-primary-300 dark:bg-primary-800', label: 'Não respondido' },
+            { color: 'bg-purple-500/40', label: 'Ensaio' },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-1.5">
               <span className={cn('w-3 h-3 rounded-full inline-block', color)} />
@@ -376,9 +395,26 @@ export default function Availability() {
 
           {mySubdeps.length === 0 ? (
             <p className="text-xs text-[var(--color-text-3)]">Nenhum subdepartamento vinculado ao seu perfil.</p>
-          ) : (
+          ) : (() => {
+            const activeSubdeps = activeSubdepsForDay(selectedDay)
+            const isEnsaio = activeSubdeps.length < mySubdeps.length
+
+            return (
             <div className="space-y-4">
-              {mySubdeps.map(subdep => {
+              {isEnsaio && (
+                <div className="flex items-center gap-2 rounded-xl bg-purple-500/10 border border-purple-500/30 px-3 py-2.5">
+                  <Music size={14} className="text-purple-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-purple-400">Domingo de Ensaio</p>
+                    <p className="text-2xs text-[var(--color-text-3)]">
+                      {activeSubdeps.length === 0
+                        ? 'Apenas a regência serve neste domingo — você não precisa preencher disponibilidade.'
+                        : 'Apenas a regência serve neste domingo.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {activeSubdeps.map(subdep => {
                 const key  = `${selectedDay}:${subdep}`
                 const disp = disponibilis[key]
                 const bri  = briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep)
@@ -460,7 +496,8 @@ export default function Availability() {
                 )
               })}
             </div>
-          )}
+            )
+          })()}
         </Card>
       )}
 
