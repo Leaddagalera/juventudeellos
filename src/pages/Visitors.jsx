@@ -8,7 +8,8 @@ import { Button } from '../components/ui/Button.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
 import { Modal, ConfirmModal } from '../components/ui/Modal.jsx'
 import { formatDate } from '../lib/utils.js'
-import { notify } from '../lib/whatsapp.js'
+import { notify, DEFAULT_CONDITIONS } from '../lib/whatsapp.js'
+import { loadAppConfig } from '../lib/config.js'
 import { cn } from '../lib/utils.js'
 
 const ESTADO_CIVIL = [
@@ -136,8 +137,18 @@ export default function Visitors() {
       const today = todayStr()
       const { data: prev } = await supabase
         .from('visitantes').select('id').ilike('nome', regForm.nome.trim())
-        .limit(5)
-      const isRecorrente = prev && prev.length > 0
+        .limit(20)
+      const visitasAnteriores = prev ? prev.length : 0
+      const isRecorrente = visitasAnteriores > 0
+
+      // Lê o limiar configurável (padrão: 2 — notifica a partir da 2ª visita)
+      const appCfg = await loadAppConfig()
+      const conditions = appCfg.whatsapp_conditions || {}
+      const alertaAPartirDe = conditions.visitaAlertaAPartirDe ?? DEFAULT_CONDITIONS.visitaAlertaAPartirDe
+      // visitasAnteriores é a contagem ANTES de inserir; após inserir será visitasAnteriores + 1
+      // Ex: alertaAPartirDe=2 → notifica quando a nova inserção for a 2ª visita, ou seja, visitasAnteriores >= 1
+      const deveNotificar = visitasAnteriores >= alertaAPartirDe - 1
+
       const { error } = await supabase.from('visitantes').insert({
         ...regForm,
         idade:                 regForm.idade ? Number(regForm.idade) : null,
@@ -146,7 +157,7 @@ export default function Visitors() {
         registrado_por:        profile?.id ?? null,
       })
       if (error) throw error
-      if (isRecorrente) {
+      if (deveNotificar) {
         const { data: lider } = await supabase
           .from('users').select('whatsapp').eq('role', 'lider_geral').limit(1).maybeSingle()
         if (lider?.whatsapp) await notify.segundaVisita(lider.whatsapp, regForm.nome, formatDate(today))

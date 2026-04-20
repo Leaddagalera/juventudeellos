@@ -13,7 +13,8 @@ import { Button } from '../../components/ui/Button.jsx'
 import { ConfirmModal } from '../../components/ui/Modal.jsx'
 import { runScheduleEngine } from '../../lib/scheduleEngine.js'
 import { formatDateShort, formatDomingo, isBirthdayThisWeek, daysSince, subdepLabel, formatDate } from '../../lib/utils.js'
-import { notify } from '../../lib/whatsapp.js'
+import { notify, DEFAULT_CONDITIONS } from '../../lib/whatsapp.js'
+import { loadAppConfig } from '../../lib/config.js'
 import { ReacoesBar } from '../../components/ui/ReacoesBar.jsx'
 
 const SUBDEPS = ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']
@@ -81,6 +82,11 @@ export default function LiderGeralDashboard() {
   async function loadDashboard(cancelled) {
     setLoading(true)
     try {
+      // ── 0. Carrega condições configuráveis
+      const appCfg = await loadAppConfig()
+      const conditions = appCfg.whatsapp_conditions || {}
+      const diasSemTarjaAlerta = conditions.diasSemTarjaAlerta ?? DEFAULT_CONDITIONS.diasSemTarjaAlerta
+
       // ── 1. Busca o ciclo ativo primeiro (necessário para as queries seguintes)
       const { data: ciclos } = await supabase
         .from('ciclos')
@@ -167,7 +173,7 @@ export default function LiderGeralDashboard() {
       if ((pendCadastros || 0) > 0) alertList.push({ type: 'warning', msg: `${pendCadastros} cadastro(s) pendentes de aprovação`, link: '/members' })
 
       for (const t of (tarjas || [])) {
-        if (daysSince(t.tarja_atualizada_em) >= 30) {
+        if (daysSince(t.tarja_atualizada_em) >= diasSemTarjaAlerta) {
           alertList.push({ type: 'danger', msg: `${t.nome} — ${t.tarja === 'nicodemos' ? 'Nicodemos' : 'Filho Pródigo'} há ${daysSince(t.tarja_atualizada_em)} dias sem evolução`, link: '/members' })
         }
       }

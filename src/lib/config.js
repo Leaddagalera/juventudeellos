@@ -37,7 +37,8 @@ export function invalidateAppConfig() {
 export async function saveAppConfig(key, value) {
   const { error } = await supabase
     .from('app_config')
-    .upsert({ key, value, updated_at: new Date().toISOString() })
-  if (error) throw error
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  if (error) return { error }
   invalidateAppConfig()
+  return { error: null }
 }

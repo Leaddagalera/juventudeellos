@@ -36,6 +36,7 @@ async function getConfig() {
       url:      conn.base_url  || import.meta.env.VITE_EVOLUTION_BASE_URL || '',
       apiKey:   conn.api_key   || import.meta.env.VITE_EVOLUTION_API_KEY  || '',
       instance: conn.instance  || import.meta.env.VITE_EVOLUTION_INSTANCE || '',
+      enabled:  conn.enabled !== undefined ? conn.enabled : true,
     }
     _cacheExpiresAt = now + CACHE_TTL_MS
   } catch {
@@ -44,6 +45,7 @@ async function getConfig() {
       url:      import.meta.env.VITE_EVOLUTION_BASE_URL || '',
       apiKey:   import.meta.env.VITE_EVOLUTION_API_KEY  || '',
       instance: import.meta.env.VITE_EVOLUTION_INSTANCE || '',
+      enabled:  true,
     }
     _cacheExpiresAt = now + 30_000   // retry sooner on error
   }
@@ -67,11 +69,17 @@ export function invalidateConfigCache() {
  * @returns {Promise<{ key?: { id: string }, demo?: boolean }>}
  */
 export async function sendWhatsApp({ numero, mensagem }) {
-  const { url, apiKey, instance } = await getConfig()
+  const { url, apiKey, instance, enabled } = await getConfig()
 
   // Normalize number — strip non-digits, add Brazil country code if missing
   const digits   = numero.replace(/\D/g, '')
   const withCC   = digits.startsWith('55') ? digits : `55${digits}`
+
+  // Respect the "enabled" toggle from Settings → Conexão
+  if (enabled === false) {
+    console.log('[WhatsApp DEMO/disabled] →', withCC, ':', mensagem)
+    return { demo: true }
+  }
 
   if (!url || !apiKey || !instance) {
     console.log('[WhatsApp DEMO] →', withCC, ':', mensagem)
