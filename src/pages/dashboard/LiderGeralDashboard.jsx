@@ -208,16 +208,25 @@ export default function LiderGeralDashboard() {
     }
   }
 
-  // Cycle day
+  // Cycle progress — phase-based (not time-based)
+  const PHASE_PROGRESS = {
+    briefing_regente: 10,
+    briefing_lider:   22,
+    disponibilidade:  45,
+    gerando_escala:   58,
+    escala_publicada: 75,
+    confirmacoes:     90,
+    encerrado:        100,
+  }
+  const cycleProgress = ciclo ? (PHASE_PROGRESS[ciclo.status] ?? 0) : 0
+
+  // Cycle day (used only for the date label)
   const cycleDay = ciclo
     ? Math.floor((Date.now() - new Date(ciclo.inicio + 'T00:00:00').getTime()) / 86_400_000) + 1
     : null
   const cycleTotalDays = ciclo
     ? Math.max(1, Math.round((new Date(ciclo.fim + 'T00:00:00') - new Date(ciclo.inicio + 'T00:00:00')) / 86_400_000))
     : 45
-  const cycleProgress = cycleDay && cycleDay > 0
-    ? Math.min(100, Math.round((cycleDay / cycleTotalDays) * 100))
-    : 0
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
