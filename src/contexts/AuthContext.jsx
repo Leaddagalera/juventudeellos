@@ -72,95 +72,51 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true
+    const hasCached = !!getCachedProfile()
 
-    async function init() {
-      const hasCached = !!getCachedProfile()
-
-      try {
-        // Timeout de 8s em getSession para evitar travamento em rede ruim.
-        // Resolve com null no timeout em vez de rejeitar, para não cair no catch.
-        let sessionData = null
-        try {
-          const result = await Promise.race([
-            supabase.auth.getSession(),
-            new Promise(resolve =>
-              setTimeout(() => resolve({ data: { session: null }, timedOut: true }), 8000)
-            ),
-          ])
-
-          if (result.timedOut) {
-            // Timeout: se há cache, mantém hydrating=true e espera onAuthStateChange.
-            // O Supabase vai retentar o refresh e emitir TOKEN_REFRESHED ou SIGNED_OUT.
-            if (!mounted) return
-            if (!hasCached) {
-              // Sem cache e sem sessão confirmada → redireciona para login
-              setLoading(false)
-              setHydrating(false)
-              initializedRef.current = true
-            }
-            // Com cache: mantém tudo como está, onAuthStateChange resolve
-            return
-          }
-
-          sessionData = result.data?.session
-        } catch (sessionErr) {
-          console.warn('[Auth] getSession error:', sessionErr.message)
-          if (mounted) {
-            setHydrating(false)
-            setLoading(false)
-            initializedRef.current = true
-          }
-          return
-        }
-
-        if (!mounted) return
-        setSession(prev => prev?.access_token === sessionData?.access_token ? prev : sessionData)
-
-        if (!sessionData?.user) {
-          // Sessão inválida ou expirada
-          if (hasCached) {
-            setProfile(null)
-            setCachedProfile(null)
-            setProfileAttempted(false)
-          }
-          setHydrating(false)
-          setLoading(false)
-          initializedRef.current = true
-          return
-        }
-
-        // Sessão válida
-        setHydrating(false)
-        if (hasCached) {
-          // Cache existe: UI já está visível, atualiza perfil silenciosamente
-          setLoading(false)
-          initializedRef.current = true
-          fetchProfile(sessionData.user.id, { silent: true })
-        } else {
-          // Primeira abertura sem cache
-          await fetchProfile(sessionData.user.id)
-          if (mounted) {
-            setLoading(false)
-            initializedRef.current = true
-          }
-        }
-      } catch (err) {
-        console.warn('[Auth] init failed:', err)
-        if (mounted) {
-          setHydrating(false)
-          setLoading(false)
-          initializedRef.current = true
-        }
-      }
-    }
-
-    init()
-
+    // Usamos INITIAL_SESSION em vez de getSession() explícito.
+    // INITIAL_SESSION lê direto do localStorage (sem network), então não bloqueia
+    // operações de auth subsequentes como signInWithPassword.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (!mounted) return
-        if (event === 'INITIAL_SESSION') return
 
+        // ── Inicialização: leitura imediata do localStorage ──────────────────
+        if (event === 'INITIAL_SESSION') {
+          setSession(prev => prev?.access_token === newSession?.access_token ? prev : newSession)
+
+          if (!newSession?.user) {
+            // Sem sessão válida
+            if (hasCached) {
+              setProfile(null)
+              setCachedProfile(null)
+              setProfileAttempted(false)
+            }
+            setHydrating(false)
+            setLoading(false)
+            initializedRef.current = true
+            return
+          }
+
+          // Sessão válida
+          setHydrating(false)
+          if (hasCached) {
+            // Cache existe: UI já visível, atualiza perfil em background
+            setLoading(false)
+            initializedRef.current = true
+            fetchProfile(newSession.user.id, { silent: true })
+          } else {
+            // Primeira abertura sem cache
+            await fetchProfile(newSession.user.id)
+            if (mounted) {
+              setLoading(false)
+              initializedRef.current = true
+            }
+          }
+          return
+        }
+
+        // ── Sign-out ─────────────────────────────────────────────────────────
         if (event === 'SIGNED_OUT') {
           // Se há cache/sessão local, ignora sign-out espúrio (comum no mobile)
           if (getCachedProfile()) return
@@ -172,14 +128,14 @@ export function AuthProvider({ children }) {
           return
         }
 
+        // ── Token renovado silenciosamente ───────────────────────────────────
         if (event === 'TOKEN_REFRESHED') {
-          // Token renovado silenciosamente — atualiza sessão e encerra hydrating
           setSession(prev => prev?.access_token === newSession?.access_token ? prev : newSession)
           setHydrating(false)
           return
         }
 
-        // SIGNED_IN, USER_UPDATED, etc.
+        // ── SIGNED_IN, USER_UPDATED, etc. ────────────────────────────────────
         setSession(prev => prev?.access_token === newSession?.access_token ? prev : newSession)
         setHydrating(false)
         if (newSession?.user) {
@@ -197,11 +153,16 @@ export function AuthProvider({ children }) {
   }, [fetchProfile])
 
   const signIn = useCallback(async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
+    // Timeout de 20s para evitar "Entrando..." infinito em caso de lentidão no auth service
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Tempo limite de conexão. Verifique sua internet e tente novamente.')), 20000)
+    )
+    const authPromise = supabase.auth.signInWithPassword({ email, password })
+      .then(({ data, error }) => { if (error) throw error; return data })
+
     // Nota: a verificação de ativo=false é feita por RequireAuth via fetchProfile,
     // evitando query extra ao banco que pode bloquear o login quando o pool está saturado.
-    return data
+    return Promise.race([authPromise, timeoutPromise])
   }, [])
 
   const signUp = useCallback(async (email, password, profileData) => {
