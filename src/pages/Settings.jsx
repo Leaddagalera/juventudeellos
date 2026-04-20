@@ -256,32 +256,40 @@ export default function Settings() {
     setQrError('')
 
     // Poll Supabase every 3s for QR code or connected state (max 3 min)
+    // Guard flag evita queries concorrentes caso o banco demore mais de 3s
     let ticks = 0
+    let busy = false
     pollRef.current = setInterval(async () => {
       if (!mountedRef.current) { stopPoll(); return }
+      if (busy) return   // tick anterior ainda em andamento — pula este
+      busy = true
       ticks++
-      const { data } = await supabase
-        .from('app_config')
-        .select('key, value')
-        .in('key', ['whatsapp_qr', 'whatsapp_state'])
-      if (!mountedRef.current) { stopPoll(); return }
-      const cfg = {}
-      for (const row of (data || [])) cfg[row.key] = row.value
-      const state = cfg.whatsapp_state
-      const qr    = cfg.whatsapp_qr
-      if (state) setWaState(state)
-      if (qr && typeof qr === 'string' && qr.length > 10) {
-        setQrData(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`)
-      }
-      if (state === 'open') {
-        stopPoll()
-        setQrData(null)
-        setTestResult('ok')
-        setTestMsg('✓ WhatsApp conectado e ativo!')
-      }
-      if (ticks > 60) {   // 3 min timeout
-        stopPoll()
-        if (!qr) setQrError('Tempo esgotado. Verifique o servidor e tente novamente.')
+      try {
+        const { data } = await supabase
+          .from('app_config')
+          .select('key, value')
+          .in('key', ['whatsapp_qr', 'whatsapp_state'])
+        if (!mountedRef.current) { stopPoll(); return }
+        const cfg = {}
+        for (const row of (data || [])) cfg[row.key] = row.value
+        const state = cfg.whatsapp_state
+        const qr    = cfg.whatsapp_qr
+        if (state) setWaState(state)
+        if (qr && typeof qr === 'string' && qr.length > 10) {
+          setQrData(qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`)
+        }
+        if (state === 'open') {
+          stopPoll()
+          setQrData(null)
+          setTestResult('ok')
+          setTestMsg('✓ WhatsApp conectado e ativo!')
+        }
+        if (ticks > 60) {   // 3 min timeout
+          stopPoll()
+          if (!qr) setQrError('Tempo esgotado. Verifique o servidor e tente novamente.')
+        }
+      } finally {
+        busy = false
       }
     }, 3000)
   }

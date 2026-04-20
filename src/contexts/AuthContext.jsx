@@ -199,14 +199,8 @@ export function AuthProvider({ children }) {
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    if (data.user) {
-      const { data: userRow } = await supabase
-        .from('users').select('ativo').eq('id', data.user.id).single()
-      if (userRow?.ativo === false) {
-        await supabase.auth.signOut()
-        throw new Error('PENDING_APPROVAL')
-      }
-    }
+    // Nota: a verificação de ativo=false é feita por RequireAuth via fetchProfile,
+    // evitando query extra ao banco que pode bloquear o login quando o pool está saturado.
     return data
   }, [])
 
