@@ -154,7 +154,8 @@
     @apply h-1.5 rounded-full bg-[var(--color-bg-3)] overflow-hidden;
   }
   .cycle-bar-fill {
-    @apply h-full rounded-full bg-primary-600 transition-all duration-500;
+    @apply h-full rounded-full transition-all duration-500;
+    background-color: #39FF14;
   }
 
   /* ── Availability calendar ── */
