@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   RefreshCw, Plus, Edit2, Save, ChevronDown, ChevronUp,
   Clock, Calendar, Users, Settings2, AlertTriangle, CheckCircle,
-  PlayCircle, Layers, Shuffle,
+  PlayCircle, Layers, Shuffle, X, XCircle,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
@@ -24,7 +24,8 @@ import { Badge } from '../ui/Badge.jsx'
 import { Modal } from '../ui/Modal.jsx'
 import { SYS_DEFAULTS, getSysConfig, invalidateSysConfig } from '../../lib/sysConfig.js'
 import { cn, subdepLabel } from '../../lib/utils.js'
-import { notify } from '../../lib/whatsapp.js'
+import { notify, DEFAULT_CONDITIONS } from '../../lib/whatsapp.js'
+import { loadAppConfig } from '../../lib/config.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -174,6 +175,146 @@ function CycleModal({ cycle, onSave, onClose, saving }) {
   )
 }
 
+// ── Notification Result Banner ────────────────────────────────────────────────
+
+function NotifResultBanner({ result, onClose }) {
+  if (!result) return null
+
+  const { phaseLabel, preflightFail, currentHour, windowStart, windowEnd, sent, demo, skipped, errors } = result
+
+  const fmt = (h) => `${String(h).padStart(2, '0')}h`
+
+  if (preflightFail === 'outside_window') {
+    const now = new Date()
+    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-3 text-sm">
+        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-amber-800 dark:text-amber-200">Mensagens NÃO enviadas</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+            Ciclo avançado para <strong>&quot;{phaseLabel}&quot;</strong>, mas o horário atual ({hhmm}) está fora da janela de envio configurada ({fmt(windowStart)}–{fmt(windowEnd)}).
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+            Configure a janela em <strong>Configurações → Condições</strong>, ou aguarde o horário permitido.
+          </p>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  if (result.error) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-sm">
+        <XCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-red-800 dark:text-red-200">Erro ao processar notificações</p>
+          <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">{result.error}</p>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  if (sent === 0 && demo > 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-3 text-sm">
+        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-amber-800 dark:text-amber-200">Modo demo — Evolution API não configurada</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+            <strong>{demo}</strong> mensagem{demo !== 1 ? 's' : ''} simulada{demo !== 1 ? 's' : ''} mas <strong>NÃO enviada{demo !== 1 ? 's' : ''}</strong>.
+            Configure as credenciais em <strong>Configurações → Conexão</strong>.
+          </p>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  if (sent > 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-success-300 dark:border-success-700 bg-success-50 dark:bg-success-900/20 px-3 py-3 text-sm">
+        <CheckCircle size={16} className="text-success-600 dark:text-success-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-success-800 dark:text-success-200">
+            {sent} mensagem{sent !== 1 ? 's' : ''} enviada{sent !== 1 ? 's' : ''} com sucesso
+          </p>
+          {(skipped > 0 || demo > 0 || errors > 0) && (
+            <p className="text-xs text-success-700 dark:text-success-300 mt-0.5 leading-relaxed">
+              {skipped > 0 && <span>{skipped} ignorada{skipped !== 1 ? 's' : ''} (fora da janela/role filtrado) </span>}
+              {demo > 0 && <span>{demo} em demo </span>}
+              {errors > 0 && <span>{errors} com erro</span>}
+            </p>
+          )}
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-success-500 hover:text-success-700 dark:hover:text-success-300 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  if (sent === 0 && skipped > 0 && demo === 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-3 text-sm">
+        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-amber-800 dark:text-amber-200">Nenhuma mensagem enviada</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+            <strong>{skipped}</strong> mensagem{skipped !== 1 ? 's' : ''} ignorada{skipped !== 1 ? 's' : ''}.
+            Possíveis motivos: automações desativadas, role filtrado, ou janela de envio.
+          </p>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  if (errors > 0 && sent === 0 && demo === 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-sm">
+        <XCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-red-800 dark:text-red-200">
+            {errors} erro{errors !== 1 ? 's' : ''} ao enviar
+          </p>
+          <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">
+            Verifique a conexão com a Evolution API e os números cadastrados.
+          </p>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  // Fallback: nada enviado, nenhuma categoria específica (ex: nenhum destinatário)
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-3 text-sm">
+      <AlertTriangle size={16} className="text-[var(--color-text-3)] flex-shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-[var(--color-text-2)]">
+          Nenhum destinatário encontrado para esta fase. Verifique se há usuários ativos com WhatsApp cadastrado.
+        </p>
+      </div>
+      <button onClick={onClose} className="flex-shrink-0 text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors">
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function DevModeManager() {
@@ -196,11 +337,49 @@ export default function DevModeManager() {
   // ── WhatsApp notifications per cycle phase ────────────────────────────────
 
   async function notificarCiclo(cicloId, novoStatus, ciclo) {
+    // Counters and recipients list
+    const recipients = []
+    let sent    = 0
+    let demo    = 0
+    let skipped = 0
+    let errors  = 0
+
+    // Helper: execute one notify call and track the result
+    async function track(promise, nome) {
+      try {
+        const res = await promise
+        if (res?.demo) {
+          demo++
+          recipients.push({ nome, status: 'demo' })
+        } else if (res?.skipped) {
+          skipped++
+          recipients.push({ nome, status: 'skipped', reason: res.reason })
+        } else if (res?.error || res?.invalid) {
+          errors++
+          recipients.push({ nome, status: 'error', reason: res.error || 'invalid_number' })
+        } else {
+          sent++
+          recipients.push({ nome, status: 'sent' })
+        }
+      } catch (err) {
+        errors++
+        recipients.push({ nome, status: 'error', reason: err.message })
+      }
+    }
+
     try {
-      // Load conditions from app_config
-      const { data: cfgRows } = await supabase
-        .from('app_config').select('key, value').eq('key', 'whatsapp_conditions')
-      const conditions = cfgRows?.[0]?.value || {}
+      // ── Pre-flight: check send window before doing any DB queries ──────────
+      const appCfg   = await loadAppConfig()
+      const conditions = appCfg.whatsapp_conditions || DEFAULT_CONDITIONS
+      const windowStart = conditions.sendAfterHour  ?? DEFAULT_CONDITIONS.sendAfterHour
+      const windowEnd   = conditions.sendBeforeHour ?? DEFAULT_CONDITIONS.sendBeforeHour
+      const currentHour = new Date().getHours()
+
+      if (currentHour < windowStart || currentHour >= windowEnd) {
+        return { preflightFail: 'outside_window', currentHour, windowStart, windowEnd, sent: 0, demo: 0, skipped: 0, errors: 0, recipients: [] }
+      }
+
+      // ── Load whatsapp_conditions for deadline calculations ─────────────────
       const prazoBriefingRegente = conditions.prazoBriefingRegenteDias ?? 3
       const prazoBriefingLider   = conditions.prazoBriefingLiderDias   ?? 3
       const prazoDisponibilidade = conditions.prazoDisponibilidadeDias  ?? 7
@@ -213,7 +392,7 @@ export default function DevModeManager() {
             .eq('ativo', true).eq('role', 'lider_funcao').eq('subdep_lider', 'regencia')
           const prazo = new Date(Date.now() + prazoBriefingRegente * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           for (const u of (users || [])) {
-            if (u.whatsapp) await notify.briefingRegentesAberto(u.whatsapp, u.nome, prazo).catch(() => {})
+            if (u.whatsapp) await track(notify.briefingRegentesAberto(u.whatsapp, u.nome, prazo), u.nome)
           }
           break
         }
@@ -232,9 +411,9 @@ export default function DevModeManager() {
           for (const u of (regentes || [])) {
             if (!u.whatsapp) continue
             if (pending.length === 0) {
-              await notify.cicloFaseAgradecimento(u.whatsapp, u.nome, 'briefings de Regência').catch(() => {})
+              await track(notify.cicloFaseAgradecimento(u.whatsapp, u.nome, 'briefings de Regência'), u.nome)
             } else {
-              await notify.cicloFasePendencia(u.whatsapp, u.nome, `briefing de Regência (${pending.length} domingo(s))`).catch(() => {})
+              await track(notify.cicloFasePendencia(u.whatsapp, u.nome, `briefing de Regência (${pending.length} domingo(s))`), u.nome)
             }
           }
 
@@ -244,7 +423,7 @@ export default function DevModeManager() {
           const prazo = new Date(Date.now() + prazoBriefingLider * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           for (const u of (lideres || [])) {
             if (u.whatsapp && u.subdep_lider) {
-              await notify.briefingLideresAberto(u.whatsapp, u.nome, subdepLabel(u.subdep_lider), prazo).catch(() => {})
+              await track(notify.briefingLideresAberto(u.whatsapp, u.nome, subdepLabel(u.subdep_lider), prazo), u.nome)
             }
           }
           break
@@ -265,9 +444,9 @@ export default function DevModeManager() {
             for (const u of (lideres || [])) {
               if (!u.whatsapp) continue
               if (pending.length === 0) {
-                await notify.cicloFaseAgradecimento(u.whatsapp, u.nome, `briefings de ${subdepLabel(subdep)}`).catch(() => {})
+                await track(notify.cicloFaseAgradecimento(u.whatsapp, u.nome, `briefings de ${subdepLabel(subdep)}`), u.nome)
               } else {
-                await notify.cicloFasePendencia(u.whatsapp, u.nome, `briefing de ${subdepLabel(subdep)} (${pending.length} domingo(s))`).catch(() => {})
+                await track(notify.cicloFasePendencia(u.whatsapp, u.nome, `briefing de ${subdepLabel(subdep)} (${pending.length} domingo(s))`), u.nome)
               }
             }
           }
@@ -276,7 +455,7 @@ export default function DevModeManager() {
             .eq('ativo', true).eq('role', 'membro_serve')
           const prazo = new Date(Date.now() + prazoDisponibilidade * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           for (const u of (membros || [])) {
-            if (u.whatsapp) await notify.disponibilidadeAberta(u.whatsapp, u.nome, prazo).catch(() => {})
+            if (u.whatsapp) await track(notify.disponibilidadeAberta(u.whatsapp, u.nome, prazo), u.nome)
           }
           break
         }
@@ -292,7 +471,7 @@ export default function DevModeManager() {
           }
           for (const { user, list } of Object.values(byUser)) {
             if (user?.whatsapp) {
-              await notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role).catch(() => {})
+              await track(notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role), user.nome)
             }
           }
           break
@@ -309,7 +488,7 @@ export default function DevModeManager() {
           }
           for (const { user, list } of Object.values(byUser)) {
             if (user?.whatsapp) {
-              await notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role).catch(() => {})
+              await track(notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role), user.nome)
             }
           }
           break
@@ -319,7 +498,10 @@ export default function DevModeManager() {
       }
     } catch (err) {
       console.error('[notificarCiclo]', err)
+      errors++
     }
+
+    return { sent, demo, skipped, errors, recipients }
   }
 
   // ── Load everything ───────────────────────────────────────────────────────
@@ -353,6 +535,11 @@ export default function DevModeManager() {
     loadCycles()
     loadConfig()
   }, [loadCycles, loadConfig])
+
+  // ── Notification result state
+  const [notifResult, setNotifResult] = useState(null)
+  // Format: { cycleId, phaseLabel, preflightFail?, currentHour?, windowStart?, windowEnd?,
+  //           sent, demo, skipped, errors, recipients: [{nome, status, reason?}] }
 
   // ── Schedule generator state
   const [generating, setGenerating] = useState(false)
@@ -388,15 +575,14 @@ export default function DevModeManager() {
     const next = STATUS_FLOW[idx + 1]
     if (!next) return
     if (!confirm(`Avançar ciclo para "${STATUS_META[next]?.label}"?`)) return
-    try {
-      const { error } = await supabase.from('ciclos').update({ status: next }).eq('id', cycle.id)
-      if (error) throw error
-      // Fire WhatsApp notifications (non-blocking)
-      notificarCiclo(cycle.id, next, cycle).catch(e => console.warn('[notify]', e))
-      await loadCycles()
-    } catch (err) {
-      alert('Erro: ' + err.message)
-    }
+
+    const { error } = await supabase.from('ciclos').update({ status: next }).eq('id', cycle.id)
+    if (error) { alert('Erro: ' + error.message); return }
+
+    setNotifResult(null)
+    const result = await notificarCiclo(cycle.id, next, cycle).catch(e => ({ error: e.message }))
+    setNotifResult({ cycleId: cycle.id, phaseLabel: STATUS_META[next]?.label, ...result })
+    await loadCycles()
   }
 
   // ── Schedule generator ───────────────────────────────────────────────────
@@ -664,6 +850,12 @@ export default function DevModeManager() {
                             </Button>
                           )}
                         </div>
+                        {notifResult?.cycleId === cy.id && (
+                          <NotifResultBanner
+                            result={notifResult}
+                            onClose={() => setNotifResult(null)}
+                          />
+                        )}
                         {genResult?.cicloId === cy.id && (
                           <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-1)] bg-success-500/10 border border-success-500/30 rounded-lg px-3 py-2">
                             <CheckCircle size={13} className="text-success-500 flex-shrink-0" />
