@@ -139,7 +139,9 @@ export async function runScheduleEngine(cicloId) {
 
     for (const subdep of ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']) {
       // Find briefing for this sunday + subdep
-      const briefing = briefings?.find(b => b.domingo === domingo && b.subdepartamento === subdep)
+      // Louvor usa o briefing da regência (mesmo registro, sem duplicata)
+      const briefingSubdep = subdep === 'louvor' ? 'regencia' : subdep
+      const briefing = briefings?.find(b => b.domingo === domingo && b.subdepartamento === briefingSubdep)
       if (!briefing) {
         alertas.push({ domingo, subdep, tipo: 'sem_briefing', info: 'Briefing não preenchido' })
         sundaysCovered[domingo][subdep] = 'sem_briefing'
