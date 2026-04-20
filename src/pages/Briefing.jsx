@@ -855,7 +855,8 @@ export default function Briefing() {
   const { profile, isLiderGeral, isLiderFuncao } = useAuth()
   const { config: sysConfig } = useSysConfig()
 
-  const isMembroServe = profile?.role === 'membro_serve'
+  const isMembroServe      = profile?.role === 'membro_serve'
+  const isMembroObservador = profile?.role === 'membro_observador'
 
   // Calcular subdeps visíveis ANTES dos useStates para poder usar no initializer
   const mySubdeps = Array.isArray(profile?.subdepartamento)
@@ -882,7 +883,7 @@ export default function Briefing() {
   const [ensaioModal,  setEnsaioModal]  = useState(null) // { domingo }
   // lider_geral começa na visão geral; os demais, direto no primeiro subdep deles
   const [activeTab, setActiveTab] = useState(
-    isLiderGeral ? 'geral' : (visibleSubdeps[0] || 'geral')
+    isLiderGeral ? 'geral' : isMembroObservador ? 'ensaio' : (visibleSubdeps[0] || 'geral')
   )
 
   const loadBriefings = useCallback(async (silent = false) => {
@@ -959,7 +960,7 @@ export default function Briefing() {
   // lider_funcao só edita o subdep que LIDERA (subdep_lider), não todos que serve.
   const canEdit = (subdep) => {
     if (!ciclo) return false
-    if (isMembroServe) return false
+    if (isMembroServe || isMembroObservador) return false
     const { status } = ciclo
     if (status !== 'briefing_regente' && status !== 'briefing_lider') return false
     if (isLiderGeral) return true
@@ -977,7 +978,7 @@ export default function Briefing() {
   // Ensaio: editável até o dia do domingo — somente líder da regência; membro_serve só visualiza
   const canEditEnsaio = (domingo) => {
     if (!ciclo) return false
-    if (isMembroServe) return false
+    if (isMembroServe || isMembroObservador) return false
     if (isLiderGeral) return true
     if (isLiderFuncao && profile?.subdep_lider === 'regencia') {
       const sundayDate = new Date(domingo + 'T23:59:59')
@@ -990,7 +991,7 @@ export default function Briefing() {
   const ensaioDomingos = domingos.filter(d => isEnsaioSunday(d, ensaioWeek))
 
   // Aba Ensaio visível para todos (todos participam do ensaio)
-  const showEnsaioTab = isLiderGeral || isMembroServe || mySubdeps.includes('regencia') || profile?.subdep_lider === 'regencia'
+  const showEnsaioTab = isLiderGeral || isMembroServe || isMembroObservador || mySubdeps.includes('regencia') || profile?.subdep_lider === 'regencia'
 
   const isEditPhase = ciclo && ['briefing_regente', 'briefing_lider'].includes(ciclo.status)
 
@@ -1080,6 +1081,12 @@ export default function Briefing() {
         <div className="alert-strip info">
           <Eye size={13} />
           <span>Somente visualização — apenas líderes podem editar briefings.</span>
+        </div>
+      )}
+      {isMembroObservador && (
+        <div className="alert-strip info">
+          <Eye size={13} />
+          <span>Somente visualização — você visualiza apenas o briefing do ensaio.</span>
         </div>
       )}
 

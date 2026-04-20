@@ -70,8 +70,8 @@ export const DEFAULT_PERMISSIONS = {
     campos_visiveis: _allCampos,
   },
   lider_funcao: {
-    telas:           ['dashboard', 'escalas', 'briefings', 'disponibilidade', 'comunicados'],
-    acoes:           ['preencher_briefing', 'confirmar_presenca', 'solicitar_troca'],
+    telas:           ['dashboard', 'escalas', 'briefings', 'disponibilidade', 'comunicados', 'membros', 'relatorios'],
+    acoes:           ['preencher_briefing', 'confirmar_presenca', 'solicitar_troca', 'criar_comunicado', 'ver_relatorios'],
     campos_visiveis: ['historico_servico', 'escala_geral', 'briefing_completo', 'saude_subdeps'],
   },
   membro_serve: {
@@ -80,8 +80,8 @@ export const DEFAULT_PERMISSIONS = {
     campos_visiveis: ['historico_servico', 'escala_propria'],
   },
   membro_observador: {
-    telas:           ['escalas'],
-    acoes:           [],
+    telas:           ['escalas', 'disponibilidade', 'briefings'],
+    acoes:           ['confirmar_presenca'],
     campos_visiveis: ['escala_geral', 'briefing_completo'],
   },
 }

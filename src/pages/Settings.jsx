@@ -65,7 +65,8 @@ export const MSG_META = {
   comunicadoPublicado: { label: 'Comunicado Publicado',        vars: ['{texto_preview}', '{destinatario}', '{app_url}'] },
   briefingPreenchido:  { label: 'Briefing Preenchido',         vars: ['{autor}', '{subdep}', '{domingo}', '{app_url}'] },
   visitanteIntegrado:  { label: 'Visitante Integrado',         vars: ['{visitante}'] },
-  relatorioSemanal:    { label: 'Relatório Semanal (segunda)', vars: ['{ativos}', '{confirmados}', '{escalados}', '{visitantes}', '{trocas}', '{app_url}'] },
+  relatorioSemanal:             { label: 'Relatório Semanal (segunda)', vars: ['{ativos}', '{confirmados}', '{escalados}', '{visitantes}', '{trocas}', '{app_url}'] },
+  escalaPublicadaObservador:   { label: 'Escala Publicada — Observador', vars: ['{nome}', '{app_url}'] },
 }
 
 const AUTOMATION_GROUPS = [
@@ -73,7 +74,7 @@ const AUTOMATION_GROUPS = [
   { label: 'Ciclo — Briefings',                   type: 'event',     keys: ['briefingRegentesAberto', 'briefingLideresAberto'] },
   { label: 'Ciclo — Disponibilidade',             type: 'event',     keys: ['disponibilidadeAberta'] },
   { label: 'Ciclo — Lembretes de Prazo',          type: 'scheduled', keys: ['lembreteMetadePrazo', 'lembrete90Prazo', 'encerramentoNaoPreencheu', 'encerramentoResumoLider'] },
-  { label: 'Escalas — Publicação',                type: 'event',     keys: ['escalaPublicada'] },
+  { label: 'Escalas — Publicação',                type: 'event',     keys: ['escalaPublicada', 'escalaPublicadaObservador'] },
   { label: 'Escalas — Confirmações',              type: 'scheduled', keys: ['sextaSemConfirmacao', 'sabadoSemConfirmacao', 'sabadoAlertaLider'] },
   { label: 'Trocas',                              type: 'event',     keys: ['trocaSolicitada', 'trocaAprovada', 'trocaRecusada'] },
   { label: 'Pastoral — Visitas e Tarjas',         type: 'event',     keys: ['segundaVisita', 'tarjaNegativaAlerta'] },

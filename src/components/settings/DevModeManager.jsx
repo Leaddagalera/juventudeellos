@@ -23,6 +23,7 @@ import { Input } from '../ui/Input.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { Modal } from '../ui/Modal.jsx'
 import { SYS_DEFAULTS, getSysConfig, invalidateSysConfig } from '../../lib/sysConfig.js'
+import { isEnsaioSunday } from '../../lib/scheduleEngine.js'
 import { cn, subdepLabel } from '../../lib/utils.js'
 import { notify, DEFAULT_CONDITIONS } from '../../lib/whatsapp.js'
 import { loadAppConfig } from '../../lib/config.js'
@@ -450,10 +451,10 @@ export default function DevModeManager() {
               }
             }
           }
+          const prazo = new Date(Date.now() + prazoDisponibilidade * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
           const { data: membros } = await supabase
             .from('users').select('nome, whatsapp')
-            .eq('ativo', true).eq('role', 'membro_serve')
-          const prazo = new Date(Date.now() + prazoDisponibilidade * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+            .eq('ativo', true).in('role', ['membro_serve', 'membro_observador'])
           for (const u of (membros || [])) {
             if (u.whatsapp) await track(notify.disponibilidadeAberta(u.whatsapp, u.nome, prazo), u.nome)
           }
@@ -470,8 +471,11 @@ export default function DevModeManager() {
             byUser[e.user_id].list.push(e)
           }
           for (const { user, list } of Object.values(byUser)) {
-            if (user?.whatsapp) {
-              await track(notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role), user.nome)
+            if (!user?.whatsapp) continue
+            if (user.role === 'membro_observador') {
+              await track(notify.escalaPublicadaObservador(user.whatsapp, user.nome), user.nome)
+            } else {
+              await track(notify.escalaPublicada(user.whatsapp, user.nome, list, user.role), user.nome)
             }
           }
           break
@@ -487,8 +491,11 @@ export default function DevModeManager() {
             byUser[e.user_id].list.push(e)
           }
           for (const { user, list } of Object.values(byUser)) {
-            if (user?.whatsapp) {
-              await track(notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role), user.nome)
+            if (!user?.whatsapp) continue
+            if (user.role === 'membro_observador') {
+              await track(notify.escalaPublicadaObservador(user.whatsapp, user.nome), user.nome)
+            } else {
+              await track(notify.escalaPublicada(user.whatsapp, user.nome, list, user.role), user.nome)
             }
           }
           break
@@ -657,6 +664,20 @@ export default function DevModeManager() {
             usageCount[uid] = (usageCount[uid]||0) + 1
             rows.push({ ciclo_id: cycle.id, domingo: sun, subdepartamento: sub, user_id: uid, status_confirmacao: 'pendente' })
           }
+        }
+      }
+
+      // 5b. Adicionar membro_observador nos domingos de ensaio
+      const ensaioWeek = sysConfig.ensaio_week ?? 2
+      const { data: obsDisps } = await supabase
+        .from('disponibilidades')
+        .select('user_id, domingo, users(role)')
+        .eq('ciclo_id', cycle.id)
+        .eq('subdepartamento', 'ensaio')
+        .eq('disponivel', true)
+      for (const d of (obsDisps || [])) {
+        if (d.users?.role === 'membro_observador' && isEnsaioSunday(d.domingo, ensaioWeek)) {
+          rows.push({ ciclo_id: cycle.id, domingo: d.domingo, subdepartamento: 'ensaio', user_id: d.user_id, status_confirmacao: 'pendente' })
         }
       }
 

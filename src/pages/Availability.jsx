@@ -104,6 +104,8 @@ export default function Availability() {
   const [viewYear,  setViewYear]  = useState(new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(new Date().getMonth())
 
+  const isObservador = profile?.role === 'membro_observador'
+
   const mySubdeps = (() => {
     const s = profile?.subdepartamento
     if (!s) return []
@@ -111,14 +113,14 @@ export default function Availability() {
   })()
 
   // Returns subdeps active for a given Sunday.
-  // On the ensaio Sunday all normal subdeps are kept + 'ensaio' is appended for everyone.
+  // Observadores: só 'ensaio' no domingo de ensaio, nada nos demais.
+  // Demais membros: todos os seus subdeps + 'ensaio' no domingo de ensaio.
   const activeSubdepsForDay = (dateStr) => {
     const ensaioWeek = sysConfig?.ensaio_week ?? 4
-    if (mySubdeps.length === 0) return []
     if (isEnsaioSunday(dateStr, ensaioWeek)) {
-      return [...mySubdeps, 'ensaio']
+      return isObservador ? ['ensaio'] : (mySubdeps.length > 0 ? [...mySubdeps, 'ensaio'] : [])
     }
-    return mySubdeps
+    return isObservador ? [] : mySubdeps
   }
 
   useEffect(() => {

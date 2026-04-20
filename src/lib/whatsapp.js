@@ -89,6 +89,9 @@ export const DEFAULT_MESSAGES = {
 
   relatorioSemanal:
     '📊 *Relatório semanal — Ellos Juventude*\n\n👥 Membros ativos: *{ativos}*\n✅ Confirmações: *{confirmados}/{escalados}*\n👤 Visitantes na semana: *{visitantes}*\n🔄 Trocas: *{trocas}*\n\nPainel completo: {app_url}',
+
+  escalaPublicadaObservador:
+    '🎉 Olá, *{nome}*! A escala do próximo ciclo foi publicada.\n\nSua presença no ensaio foi confirmada! 🙌\n\nAcompanhe tudo pelo sistema: {app_url}',
 }
 
 export const DEFAULT_AUTOMATIONS = {
@@ -117,7 +120,8 @@ export const DEFAULT_AUTOMATIONS = {
   comunicadoPublicado:  true,
   briefingPreenchido:   true,
   visitanteIntegrado:   true,
-  relatorioSemanal:     false,
+  relatorioSemanal:              false,
+  escalaPublicadaObservador:    true,
 }
 
 export const DEFAULT_CONDITIONS = {
@@ -144,7 +148,7 @@ const _ALL4 = ['lider_geral', 'lider_funcao', 'membro_serve', 'membro_observador
 export const DEFAULT_ROLE_FILTERS = {
   briefingRegentesAberto:   _LGF,
   briefingLideresAberto:    _LGF,
-  disponibilidadeAberta:    _ALL3,
+  disponibilidadeAberta:    _ALL4,
   lembreteMetadePrazo:      _ALL3,
   lembrete90Prazo:          _ALL3,
   encerramentoNaoPreencheu: _ALL3,
@@ -167,7 +171,8 @@ export const DEFAULT_ROLE_FILTERS = {
   comunicadoPublicado:      _ALL4,   // comunicados são para todos
   briefingPreenchido:       _LGF,
   visitanteIntegrado:       _LGF,
-  relatorioSemanal:         _LG,
+  relatorioSemanal:                _LG,
+  escalaPublicadaObservador:      ['membro_observador'],
 }
 
 // ── Config cache invalidation ──────────────────────────────────────────────
@@ -286,6 +291,9 @@ export const notify = {
       nome,
       lista: escalas.map(e => `• ${e.domingo} — ${e.subdepartamento}`).join('\n'),
     }, role ?? null),
+
+  escalaPublicadaObservador: (phone, nome) =>
+    sendTemplate('escalaPublicadaObservador', phone, { nome }, 'membro_observador'),
 
   sextaSemConfirmacao: (phone, nome, domingo) =>
     sendTemplate('sextaSemConfirmacao', phone, { nome, domingo }),
