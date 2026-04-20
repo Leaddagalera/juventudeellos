@@ -39,7 +39,20 @@ create table if not exists public.users (
   tarja_atualizada_em timestamptz,
   ativo            boolean not null default false,
   created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now()
+  updated_at       timestamptz not null default now(),
+  -- ── Ficha do Jovem ──────────────────────────────────────────────────────
+  dons              text[] default '{}',
+  vocacao           text,
+  em_discipulado    boolean not null default false,
+  discipulado_com   text,
+  batizado          boolean not null default false,
+  data_batismo      date,
+  situacao_pastoral text,
+  escolaridade      text,
+  profissao         text,
+  tem_filhos        boolean not null default false,
+  ficha_atualizada_por uuid references public.users(id),
+  ficha_atualizada_em  timestamptz
 );
 
 -- Full-text search index on nome
@@ -145,6 +158,17 @@ create table if not exists public.conteudo_login (
   aprovado_por uuid references public.users(id),
   criado_em   timestamptz not null default now()
 );
+
+-- ── ANOTAÇÕES PASTORAIS ──────────────────────────────────────────────────────
+create table if not exists public.anotacoes_pastorais (
+  id         uuid primary key default uuid_generate_v4(),
+  user_id    uuid not null references public.users(id) on delete cascade,
+  autor_id   uuid references public.users(id),
+  texto      text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists anotacoes_user on public.anotacoes_pastorais (user_id, created_at desc);
 
 -- ── COMUNICADOS ──────────────────────────────────────────────────────────────
 create table if not exists public.comunicados (
@@ -276,6 +300,14 @@ create policy "Media: public read" on public.conteudo_login for select
 create policy "Media: write"       on public.conteudo_login for all
   using (criado_por = auth.uid() or public.is_lider())
   with check (criado_por = auth.uid() or public.is_lider());
+
+-- ANOTAÇÕES PASTORAIS — apenas lider_geral
+alter table public.anotacoes_pastorais enable row level security;
+
+create policy "Pastoral: lider_geral only"
+  on public.anotacoes_pastorais for all
+  using  (public.current_user_role() = 'lider_geral')
+  with check (public.current_user_role() = 'lider_geral');
 
 -- COMUNICADOS
 create policy "Com: all read"    on public.comunicados for select using (auth.uid() is not null);
