@@ -47,7 +47,15 @@ function sundayTheme(dateStr) {
 function briefContent(subdep, dados, domingo) {
   if (!dados) return []
   const lines = []
-  // Tema do culto para todos os subdeps
+
+  if (subdep === 'ensaio') {
+    if (dados.playlist_link) lines.push({ label: 'Playlist', value: dados.playlist_link, isLink: true })
+    if (dados.hinos?.length > 0) lines.push({ label: 'Hinos', value: `${dados.hinos.length} hino(s) programado(s)` })
+    if (dados.observacoes)   lines.push({ label: 'Obs', value: dados.observacoes })
+    return lines
+  }
+
+  // Tema do culto para todos os subdeps normais
   const tema = domingo ? sundayTheme(domingo) : dados.tema_culto
   if (tema) lines.push({ label: 'Culto', value: tema })
 
@@ -63,8 +71,9 @@ function briefContent(subdep, dados, domingo) {
     if (dados.texto_base) lines.push({ label: 'Base', value: dados.texto_base })
     if (dados.observacoes) lines.push({ label: 'Obs', value: dados.observacoes })
   } else if (subdep === 'recepcao') {
-    if (dados.postos)     lines.push({ label: 'Postos', value: dados.postos })
-    if (dados.quantidade) lines.push({ label: 'Qtd. pessoas', value: `${dados.quantidade}` })
+    if (dados.postos)      lines.push({ label: 'Postos', value: dados.postos })
+    if (dados.quantidade)  lines.push({ label: 'Qtd. pessoas', value: `${dados.quantidade}` })
+    if (dados.arquivo_url) lines.push({ label: 'Fluxograma', value: dados.arquivo_url, isLink: true })
     if (dados.observacoes) lines.push({ label: 'Obs', value: dados.observacoes })
   } else if (subdep === 'midia') {
     if (dados.tema)       lines.push({ label: 'Tema visual', value: dados.tema })
@@ -151,15 +160,15 @@ export default function Availability() {
       }
       setDomingos(suns)
 
-      // Load briefings for user's subdeps
-      if (mySubdeps.length > 0) {
-        const { data: bris } = await supabase
-          .from('briefings').select('*')
-          .eq('ciclo_id', c.id)
-          .in('subdepartamento', mySubdeps)
-        if (isCancelled()) return
-        setBriefings(bris || [])
-      }
+      // Load briefings: user's subdeps + ensaio briefings (tipo='ensaio', for all members)
+      const [{ data: subdepBris }, { data: ensaioBris }] = await Promise.all([
+        mySubdeps.length > 0
+          ? supabase.from('briefings').select('*').eq('ciclo_id', c.id).in('subdepartamento', mySubdeps).neq('tipo', 'ensaio')
+          : { data: [] },
+        supabase.from('briefings').select('*').eq('ciclo_id', c.id).eq('tipo', 'ensaio'),
+      ])
+      if (isCancelled()) return
+      setBriefings([...(subdepBris || []), ...(ensaioBris || [])])
 
       // Load existing disponibilidade per subdep
       const { data: disps } = await supabase
@@ -404,8 +413,10 @@ export default function Availability() {
                 const key  = `${selectedDay}:${subdep}`
                 const disp = disponibilis[key]
                 const isEnsaioCard = subdep === 'ensaio'
-                const bri  = !isEnsaioCard ? briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep) : null
-                const lines = !isEnsaioCard ? briefContent(subdep, bri?.dados_json, selectedDay) : []
+                const bri  = isEnsaioCard
+                  ? briefings.find(b => b.domingo === selectedDay && b.tipo === 'ensaio')
+                  : briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep && b.tipo !== 'ensaio')
+                const lines = briefContent(subdep, bri?.dados_json, selectedDay)
 
                 return (
                   <div key={subdep} className={cn(
@@ -430,21 +441,30 @@ export default function Availability() {
                     </div>
 
                     <div className="px-3 py-3 space-y-3">
-                      {/* Briefing content — só para subdeps normais */}
-                      {!isEnsaioCard && (lines.length > 0 ? (
+                      {/* Briefing content */}
+                      {lines.length > 0 ? (
                         <div className="rounded-lg bg-[var(--color-bg-2)] border border-[var(--color-border)] px-3 py-2.5 space-y-1.5">
-                          {lines.map(({ label, value }) => (
+                          {lines.map(({ label, value, isLink }) => (
                             <div key={label} className="flex gap-2 text-xs">
                               <span className="text-[var(--color-text-3)] min-w-[5rem] flex-shrink-0 font-medium">{label}</span>
-                              <span className="text-[var(--color-text-1)] leading-relaxed">{value}</span>
+                              {isLink ? (
+                                <a href={value} target="_blank" rel="noopener noreferrer"
+                                  className="text-primary-400 hover:text-primary-300 underline leading-relaxed truncate">
+                                  {value}
+                                </a>
+                              ) : (
+                                <span className="text-[var(--color-text-1)] leading-relaxed">{value}</span>
+                              )}
                             </div>
                           ))}
                         </div>
                       ) : (
                         <p className="text-xs text-[var(--color-text-3)] italic">
-                          {bri ? 'Briefing preenchido · sem detalhes adicionais' : 'Briefing ainda não preenchido'}
+                          {bri ? 'Briefing preenchido · sem detalhes adicionais'
+                               : isEnsaioCard ? 'Briefing do ensaio ainda não preenchido'
+                               : 'Briefing ainda não preenchido'}
                         </p>
-                      ))}
+                      )}
 
                       {/* Availability toggle */}
                       {inWindow ? (
