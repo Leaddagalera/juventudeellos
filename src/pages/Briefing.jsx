@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Plus, Trash2, Music, Youtube, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { RefreshCw, Save, Clock, CheckCircle, AlertCircle, Edit2, Plus, Trash2, Music, Youtube, ExternalLink, FileText, Upload, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, EmptyState, Skeleton } from '../components/ui/Card.jsx'
@@ -105,11 +105,13 @@ function formatDomingoShort(dateStr) {
 // ── Modal de edição de briefing ──────────────────────────────────────────────
 function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, readOnly, isRegente, onSave }) {
   const tema = sundayTheme(domingo)
-  const [form,     setForm]     = useState({})
-  const [loading,  setLoading]  = useState(false)
-  const [saved,    setSaved]    = useState(false)
-  const [membros,  setMembros]  = useState([])
-  const [regentes, setRegentes] = useState([])
+  const [form,      setForm]      = useState({})
+  const [loading,   setLoading]   = useState(false)
+  const [saved,     setSaved]     = useState(false)
+  const [membros,   setMembros]   = useState([])
+  const [regentes,  setRegentes]  = useState([])
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
 
   useEffect(() => {
     if (open) {
@@ -143,6 +145,38 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
   }, [open, briefing, tema, subdep])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleFileUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const allowed = ['image/jpeg', 'image/jpg', 'application/pdf']
+    if (!allowed.includes(file.type)) { alert('Apenas JPEG ou PDF são permitidos.'); return }
+    if (file.size > 10 * 1024 * 1024) { alert('Arquivo muito grande. Máximo: 10 MB.'); return }
+    setUploading(true)
+    try {
+      const ext  = file.name.split('.').pop().toLowerCase()
+      const path = `recepcao/${cicloId}/${domingo}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('briefings')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('briefings').getPublicUrl(path)
+      set('arquivo_url',  data.publicUrl)
+      set('arquivo_nome', file.name)
+      set('arquivo_tipo', file.type)
+    } catch (err) {
+      alert('Erro ao enviar arquivo: ' + err.message)
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  function removeFile() {
+    set('arquivo_url',  null)
+    set('arquivo_nome', null)
+    set('arquivo_tipo', null)
+  }
 
   const handleSave = async () => {
     setLoading(true)
@@ -343,6 +377,71 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
             <Input label="Postos" placeholder="Ex: Entrada principal, lateral" value={form.postos || ''} onChange={e => set('postos', e.target.value)} disabled={readOnly} />
             <Input label="Quantidade de pessoas" type="number" min="2" value={form.quantidade || 2} onChange={e => set('quantidade', Number(e.target.value))} disabled={readOnly} />
             <Textarea label="Observações" value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} rows={2} disabled={readOnly} />
+
+            {/* Script / Fluxograma */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--color-text-2)]">Script / Fluxograma</label>
+              {form.arquivo_url ? (
+                <div className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-2)]">
+                  {form.arquivo_tipo?.startsWith('image') ? (
+                    <img
+                      src={form.arquivo_url}
+                      alt="Preview"
+                      className="w-12 h-10 rounded object-cover flex-shrink-0 border border-[var(--color-border)]"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded bg-red-100 dark:bg-red-950/30 flex items-center justify-center flex-shrink-0">
+                      <FileText size={18} className="text-red-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-[var(--color-text-1)] truncate">{form.arquivo_nome || 'Arquivo'}</p>
+                    <a
+                      href={form.arquivo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-2xs text-primary-500 hover:text-primary-400 mt-0.5"
+                    >
+                      <ExternalLink size={10} />
+                      Abrir
+                    </a>
+                  </div>
+                  {!readOnly && (
+                    <button
+                      onClick={removeFile}
+                      className="flex-shrink-0 text-[var(--color-text-3)] hover:text-red-500 transition-colors p-1"
+                      title="Remover arquivo"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ) : !readOnly ? (
+                <>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,.jpg,.jpeg,application/pdf,.pdf"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-[var(--color-border)] hover:border-primary-400 hover:bg-[var(--color-bg-2)] transition-colors text-[var(--color-text-3)] hover:text-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading
+                      ? <><Loader2 size={15} className="animate-spin" /><span className="text-xs">Enviando...</span></>
+                      : <><Upload size={15} /><span className="text-xs">Anexar JPEG ou PDF</span></>
+                    }
+                  </button>
+                  <p className="text-2xs text-[var(--color-text-3)]">Máximo 10 MB · JPEG ou PDF</p>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--color-text-3)] italic">Nenhum arquivo anexado.</p>
+              )}
+            </div>
           </div>
         )}
 
