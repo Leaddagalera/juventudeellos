@@ -178,6 +178,14 @@ export default function Settings() {
         setTestMsg('Preencha todos os campos antes de testar.')
         return
       }
+
+      // Salva automaticamente antes de testar — evita perda dos dados ao navegar
+      await supabase
+        .from('app_config')
+        .upsert({ key: 'whatsapp_connection', value: connection, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      invalidateWhatsAppConfig()
+      invalidateConfigCache()
+
       const { status, message } = await apiTestConnection({
         url: base_url, apiKey: api_key, instance,
       })
