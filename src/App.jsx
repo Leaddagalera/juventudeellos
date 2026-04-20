@@ -155,7 +155,7 @@ export default function App() {
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route path="/dashboard"    element={<DashboardRouter />} />
             <Route path="/members"      element={<Members />} />
-            <Route path="/briefing"     element={<RequireRole allowed={['lider_geral','lider_funcao']}><Briefing /></RequireRole>} />
+            <Route path="/briefing"     element={<RequireRole allowed={['lider_geral','lider_funcao','membro_serve','membro_observador']}><Briefing /></RequireRole>} />
             <Route path="/availability" element={<Availability />} />
             <Route path="/schedule"     element={<Schedule />} />
             <Route path="/visitors"     element={<Visitors />} />
