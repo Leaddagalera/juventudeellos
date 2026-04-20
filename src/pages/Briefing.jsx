@@ -1115,12 +1115,14 @@ export default function Briefing() {
                   const isEnsaio = isEnsaioSunday(domingo, ensaioWeek)
                   return (
                     <tr key={domingo} className={`border-b border-[var(--color-border)] last:border-0 ${idx % 2 !== 0 ? 'bg-[var(--color-bg-2)]/40' : ''}`}>
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-medium text-[var(--color-text-1)]">{formatDomingoShort(domingo)}</p>
+                          {isEnsaio && (
+                            <Badge variant="blue" className="text-2xs whitespace-nowrap">Ensaio</Badge>
+                          )}
+                        </div>
                         <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{tema}</p>
-                        {isEnsaio && (
-                          <Badge variant="blue" className="text-2xs mt-1">Ensaio</Badge>
-                        )}
                       </td>
                       {visibleSubdeps.map(subdep => (
                         <td key={subdep} className="px-3 py-3">

@@ -191,9 +191,10 @@ export function Layout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Top bar */}
-        <header className="flex-shrink-0 h-14 flex items-center justify-between px-4 bg-[var(--color-surface)] border-b border-[var(--color-border)] safe-pt">
-          <div className="flex items-center gap-3">
+        {/* Top bar — safe-pt is outer padding so the notch sits ABOVE the 56-px bar */}
+        <header className="flex-shrink-0 bg-[var(--color-surface)] border-b border-[var(--color-border)] safe-pt">
+          <div className="h-14 flex items-center justify-between px-4">
+            <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-2)] hover:bg-[var(--color-bg-2)] transition-colors"
@@ -354,6 +355,7 @@ export function Layout() {
                 </div>
               )}
             </div>
+          </div>
           </div>
         </header>
 
