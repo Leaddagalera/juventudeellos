@@ -255,50 +255,62 @@ export default function Visitors() {
   const statusColor = { novo:'blue', recorrente:'amber', acompanhado:'violet', integrado:'green' }
 
   function VisitorRow({ v, showEdit = false, showDelete = false }) {
+    const statusLabel = STATUS_OPTS.find(s => s.value === v.status_acompanhamento)?.label || v.status_acompanhamento
+    const estadoCivilLabel = ESTADO_CIVIL.find(e => e.value === v.estado_civil)?.label
+
     return (
-      <div className="flex items-center justify-between py-2.5 border-b border-[var(--color-border)] last:border-0 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar nome={v.nome} size="sm" />
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-[var(--color-text-1)] truncate">{v.nome}</p>
-            <div className="flex items-center gap-2 flex-wrap">
+      <div className="py-3 border-b border-[var(--color-border)] last:border-0">
+        {/* Linha 1: Avatar + Nome + Botões de ação */}
+        <div className="flex items-start gap-2">
+          <Avatar nome={v.nome} size="sm" className="flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-1">
+              <p className="text-sm font-medium text-[var(--color-text-1)] leading-snug">{v.nome}</p>
+              <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
+                {showEdit && (
+                  <button onClick={() => openEdit(v)}
+                    className="w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--color-bg-2)] text-[var(--color-text-3)] hover:text-primary-500 transition-colors touch-manipulation"
+                    title="Editar dados">
+                    <Pencil size={13} />
+                  </button>
+                )}
+                {showDelete && isLiderGeral && (
+                  <button onClick={() => setDelTarget(v)}
+                    className="w-7 h-7 flex items-center justify-center rounded hover:bg-danger-50 dark:hover:bg-danger-900/20 text-[var(--color-text-3)] hover:text-danger-500 transition-colors touch-manipulation"
+                    title="Excluir">
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Linha 2: Informações secundárias */}
+            <div className="flex items-center gap-2 flex-wrap mt-0.5">
               {v.idade && <span className="text-2xs text-[var(--color-text-3)]">{v.idade} anos</span>}
-              {v.estado_civil && <span className="text-2xs text-[var(--color-text-3)]">{ESTADO_CIVIL.find(e=>e.value===v.estado_civil)?.label}</span>}
+              {estadoCivilLabel && <span className="text-2xs text-[var(--color-text-3)]">{estadoCivilLabel}</span>}
               {v.telefone && (
-                <a href={`tel:${v.telefone}`} className="flex items-center gap-0.5 text-2xs text-primary-600 hover:underline">
+                <a href={`tel:${v.telefone}`} className="flex items-center gap-0.5 text-2xs text-primary-600 hover:underline touch-manipulation">
                   <Phone size={10} />{v.telefone}
                 </a>
               )}
             </div>
+
+            {/* Linha 3: Badge de status + Select de atualização */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <Badge variant={statusColor[v.status_acompanhamento] || 'default'}>
+                {statusLabel}
+              </Badge>
+              {showEdit && canSeeHistory && (
+                <Select
+                  value={v.status_acompanhamento}
+                  onChange={e => updateStatus(v.id, e.target.value)}
+                  className="!text-xs !py-0.5 !h-7 !px-2 flex-1 min-w-0 max-w-[160px]"
+                >
+                  {STATUS_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <Badge variant={statusColor[v.status_acompanhamento] || 'default'}>
-            {STATUS_OPTS.find(s=>s.value===v.status_acompanhamento)?.label || v.status_acompanhamento}
-          </Badge>
-          {showEdit && canSeeHistory && (
-            <Select
-              value={v.status_acompanhamento}
-              onChange={e => updateStatus(v.id, e.target.value)}
-              className="!text-xs !py-0.5 !h-6 !px-1.5 w-28"
-            >
-              {STATUS_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
-          )}
-          {showEdit && (
-            <button onClick={() => openEdit(v)}
-              className="p-1 rounded hover:bg-[var(--color-surface-2)] text-[var(--color-text-3)] hover:text-primary-500 transition-colors"
-              title="Editar dados">
-              <Pencil size={13} />
-            </button>
-          )}
-          {showDelete && isLiderGeral && (
-            <button onClick={() => setDelTarget(v)}
-              className="p-1 rounded hover:bg-danger-50 dark:hover:bg-danger-900/20 text-[var(--color-text-3)] hover:text-danger-500 transition-colors"
-              title="Excluir">
-              <Trash2 size={13} />
-            </button>
-          )}
         </div>
       </div>
     )
