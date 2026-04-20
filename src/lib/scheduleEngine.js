@@ -98,9 +98,10 @@ export async function runScheduleEngine(cicloId) {
     .eq('role', 'membro_serve')
   if (e3) throw e3
 
-  // 6. Load recent schedule history (last 90 days for priority)
+  // 6. Load recent schedule history (configurable window for priority)
+  const historyDays = sysConfig.history_days ?? 90
   const ninetyDaysAgo = new Date()
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - historyDays)
   const { data: historico, error: e4 } = await supabase
     .from('escalas')
     .select('user_id, domingo, subdepartamento')
