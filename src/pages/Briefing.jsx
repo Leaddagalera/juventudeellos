@@ -863,14 +863,17 @@ export default function Briefing() {
     ? profile.subdepartamento
     : profile?.subdepartamento ? [profile.subdepartamento] : []
 
+  // Observador: sem abas de subdep (só ensaio)
   // lider_funcao e membro_serve enxergam apenas seus subdeps
   const visibleSubdeps = isLiderGeral
     ? SUBDEPS
-    : SUBDEPS.filter(s => {
-        const set = new Set(mySubdeps)
-        if (profile?.subdep_lider) set.add(profile.subdep_lider)
-        return set.has(s)
-      })
+    : isMembroObservador
+      ? []
+      : SUBDEPS.filter(s => {
+          const set = new Set(mySubdeps)
+          if (profile?.subdep_lider) set.add(profile.subdep_lider)
+          return set.has(s)
+        })
 
   const isRegente = mySubdeps.includes('regencia')
   const ensaioWeek = sysConfig?.ensaio_week ?? 2

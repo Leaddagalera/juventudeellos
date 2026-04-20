@@ -77,7 +77,8 @@ function EditMemberModal({ member, onClose, onSave, roleOpts }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const isLiderFuncaoForm = form.role === 'lider_funcao'
+  const isLiderFuncaoForm      = form.role === 'lider_funcao'
+  const isObservadorForm       = form.role === 'membro_observador'
 
   const subdepsServe = Array.isArray(form.subdepartamento)
     ? form.subdepartamento
@@ -193,7 +194,18 @@ function EditMemberModal({ member, onClose, onSave, roleOpts }) {
 
         <Input label="Nome" value={form.nome || ''} onChange={e => set('nome', e.target.value)} />
         <Input label="WhatsApp" value={form.whatsapp || ''} onChange={e => set('whatsapp', e.target.value)} />
-        <Select label="Perfil" value={form.role || ''} onChange={e => set('role', e.target.value)}>
+        <Select
+          label="Perfil"
+          value={form.role || ''}
+          onChange={e => {
+            const r = e.target.value
+            if (r === 'membro_observador') {
+              setForm(f => ({ ...f, role: r, subdepartamento: [], subdep_lider: null }))
+            } else {
+              set('role', r)
+            }
+          }}
+        >
           {roleOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
 
@@ -219,21 +231,29 @@ function EditMemberModal({ member, onClose, onSave, roleOpts }) {
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[var(--color-text-2)]">
-            {isLiderFuncaoForm ? 'Também serve em' : 'Subdepartamento(s)'}
-          </label>
-          {isLiderFuncaoForm && (
-            <p className="text-2xs text-[var(--color-text-3)] -mt-0.5">
-              Além de liderar, pode servir em outros subdepartamentos.
+        {isObservadorForm ? (
+          <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-3 py-2.5">
+            <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
+              Observadores não pertencem a nenhum subdepartamento — participam apenas dos ensaios.
             </p>
-          )}
-          <ChipSelect
-            options={SUBDEP_CHIP_OPTS}
-            selected={subdepsServe}
-            onChange={v => set('subdepartamento', v)}
-          />
-        </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-[var(--color-text-2)]">
+              {isLiderFuncaoForm ? 'Também serve em' : 'Subdepartamento(s)'}
+            </label>
+            {isLiderFuncaoForm && (
+              <p className="text-2xs text-[var(--color-text-3)] -mt-0.5">
+                Além de liderar, pode servir em outros subdepartamentos.
+              </p>
+            )}
+            <ChipSelect
+              options={SUBDEP_CHIP_OPTS}
+              selected={subdepsServe}
+              onChange={v => set('subdepartamento', v)}
+            />
+          </div>
+        )}
 
         <Select label="Tarja pastoral" value={form.tarja || ''} onChange={e => set('tarja', e.target.value)}>
           <option value="">Sem tarja</option>

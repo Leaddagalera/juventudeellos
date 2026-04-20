@@ -6,14 +6,15 @@ import { Button } from '../components/ui/Button.jsx'
 import { Input, Select, ChipSelect } from '../components/ui/Input.jsx'
 
 const SUBDEPS = [
-  { value: 'louvor',   label: 'Louvor' },
-  { value: 'regencia', label: 'Regência' },
-  { value: 'ebd',      label: 'EBD' },
-  { value: 'recepcao', label: 'Recepção' },
-  { value: 'midia',    label: 'Mídia' },
+  { value: 'louvor',     label: 'Louvor' },
+  { value: 'regencia',   label: 'Regência' },
+  { value: 'ebd',        label: 'EBD' },
+  { value: 'recepcao',   label: 'Recepção' },
+  { value: 'midia',      label: 'Mídia' },
+  { value: 'observador', label: 'Membro Observador' },
 ]
 
-// Subdepartamentos exclusivos — não acumulam com nenhum outro
+// "observador" é exclusivo — não acumula com outros subdeps
 
 const INSTRUMENTOS = [
   { value: 'violao',   label: 'Violão' },
@@ -65,8 +66,19 @@ export default function Register() {
     return null
   }
 
+  const isObservadorSelected = form.subdepartamento.includes('observador')
+
+  // "observador" é exclusivo — limpa outros ao ser selecionado e vice-versa
+  const handleSubdepChange = (v) => {
+    const wasObs = form.subdepartamento.includes('observador')
+    const selectingObs = v.includes('observador') && !wasObs
+    if (selectingObs) { set('subdepartamento', ['observador']); return }
+    if (wasObs && v.length > 1) { set('subdepartamento', v.filter(s => s !== 'observador')); return }
+    set('subdepartamento', v)
+  }
+
   const validateStep3 = () => {
-    if (!form.subdepartamento.length) return 'Selecione ao menos um subdepartamento'
+    if (!form.subdepartamento.length) return 'Selecione ao menos um subdepartamento ou "Membro Observador"'
     return null
   }
 
@@ -83,7 +95,11 @@ export default function Register() {
     setLoading(true)
     setError('')
     try {
-      await signUp(form.email, form.password, form)
+      const submitForm = {
+        ...form,
+        subdepartamento: isObservadorSelected ? [] : form.subdepartamento,
+      }
+      await signUp(form.email, form.password, submitForm)
       setDone(true)
     } catch (err) {
       setError(
@@ -176,16 +192,21 @@ export default function Register() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[var(--color-text-2)]">
-                  Subdepartamento(s)
+                  Participação no departamento
                 </label>
                 <ChipSelect
                   options={SUBDEPS}
                   selected={form.subdepartamento}
-                  onChange={v => set('subdepartamento', v)}
+                  onChange={handleSubdepChange}
                 />
+                {isObservadorSelected && (
+                  <p className="text-xs text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2 leading-relaxed">
+                    Você participará apenas dos ensaios. Nenhum subdepartamento necessário — o líder definirá seu perfil na aprovação.
+                  </p>
+                )}
               </div>
 
-              {form.subdepartamento.includes('louvor') && (
+              {form.subdepartamento.includes('louvor') && !isObservadorSelected && (
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-[var(--color-text-2)]">Instrumentos</label>
                   <ChipSelect

@@ -207,7 +207,8 @@ function applySubdepRules(perms, subdepartamento) {
 export function usePermissions() {
   const { profile } = useAuth()
   const role         = profile?.role
-  const subdep       = profile?.subdepartamento
+  // Observadores nunca herdam permissões extras por subdep (independente do que estiver no banco)
+  const subdep       = role === 'membro_observador' ? [] : profile?.subdepartamento
   // Serializa array para string estável como dep do useEffect
   const subdepKey    = Array.isArray(subdep) ? subdep.join(',') : (subdep || '')
   const fallback = DEFAULT_PERMISSIONS[role] || { telas: [], acoes: [], campos_visiveis: [] }
