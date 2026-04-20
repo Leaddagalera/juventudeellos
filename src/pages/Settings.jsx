@@ -13,6 +13,7 @@ import {
   DEFAULT_MESSAGES,
   DEFAULT_AUTOMATIONS,
   DEFAULT_CONDITIONS,
+  DEFAULT_ROLE_FILTERS,
   invalidateWhatsAppConfig,
 } from '../lib/whatsapp.js'
 import {
@@ -83,6 +84,13 @@ const AUTOMATION_GROUPS = [
   { label: 'Notificações — Relatório Semanal', type: 'scheduled', keys: ['relatorioSemanal'] },
 ]
 
+const ROLE_OPTIONS = [
+  { value: 'lider_geral',       label: 'Líder Geral' },
+  { value: 'lider_funcao',      label: 'Líder Função' },
+  { value: 'membro_serve',      label: 'Serve' },
+  { value: 'membro_observador', label: 'Observador' },
+]
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -96,6 +104,7 @@ export default function Settings() {
   const [automations, setAutomations] = useState({ ...DEFAULT_AUTOMATIONS })
   const [conditions,  setConditions]  = useState({ ...DEFAULT_CONDITIONS })
   const [appUrl,      setAppUrl]      = useState('')
+  const [roleFilters, setRoleFilters] = useState({})
 
   // ui
   const [showKey,    setShowKey]    = useState(false)
@@ -126,7 +135,7 @@ export default function Settings() {
       const { data } = await supabase
         .from('app_config')
         .select('key, value')
-        .in('key', ['whatsapp_connection', 'whatsapp_messages', 'whatsapp_automations', 'whatsapp_conditions', 'app_url'])
+        .in('key', ['whatsapp_connection', 'whatsapp_messages', 'whatsapp_automations', 'whatsapp_conditions', 'whatsapp_role_filters', 'app_url'])
 
       const cfg = {}
       for (const row of (data || [])) cfg[row.key] = row.value
@@ -136,6 +145,7 @@ export default function Settings() {
       if (cfg.app_url)             setAppUrl(cfg.app_url)
       setAutomations({ ...DEFAULT_AUTOMATIONS, ...(cfg.whatsapp_automations || {}) })
       setConditions({ ...DEFAULT_CONDITIONS,   ...(cfg.whatsapp_conditions  || {}) })
+      if (cfg.whatsapp_role_filters) setRoleFilters(cfg.whatsapp_role_filters)
     } catch (err) {
       console.error('[Settings] load error', err)
     } finally {
@@ -308,6 +318,19 @@ export default function Settings() {
     fetchWaState().then(s => { if (!cancelled && s) setWaState(s) })
     return () => { cancelled = true; stopPoll() }
   }, [tab])  // ← only tab; connection values read from connectionRef at call time
+
+  // ── Role filter toggle ───────────────────────────────────────────────────────
+  function toggleRoleFilter(key, role) {
+    setRoleFilters(prev => {
+      const current = prev[key] ?? DEFAULT_ROLE_FILTERS[key] ?? []
+      return {
+        ...prev,
+        [key]: current.includes(role)
+          ? current.filter(r => r !== role)
+          : [...current, role],
+      }
+    })
+  }
 
   // ── Guards ───────────────────────────────────────────────────────────────────
   if (!isLiderGeral) {
@@ -690,21 +713,37 @@ export default function Settings() {
                   </div>
                 }
               >
-                <div className="divide-y divide-[var(--color-border)]">
+                <div>
                   {group.keys.map(key => {
                     const enabled = automations[key] !== undefined ? automations[key] : true
                     return (
-                      <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                        <div className="min-w-0 pr-4">
-                          <p className="text-sm text-[var(--color-text-1)]">{MSG_META[key]?.label || key}</p>
-                          <p className="text-2xs text-[var(--color-text-3)] mt-0.5 truncate">
-                            {MSG_META[key]?.vars.join(' · ')}
-                          </p>
+                      <div key={key} className="py-3 first:pt-0 last:pb-0 border-b border-[var(--color-border)] last:border-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <p className="text-sm text-[var(--color-text-1)] leading-snug">{MSG_META[key]?.label || key}</p>
+                          <Toggle
+                            checked={enabled}
+                            onChange={v => setAutomations(a => ({ ...a, [key]: v }))}
+                          />
                         </div>
-                        <Toggle
-                          checked={enabled}
-                          onChange={v => setAutomations(a => ({ ...a, [key]: v }))}
-                        />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {ROLE_OPTIONS.map(r => {
+                            const allowed = (roleFilters[key] ?? DEFAULT_ROLE_FILTERS[key] ?? []).includes(r.value)
+                            return (
+                              <button
+                                key={r.value}
+                                onClick={() => toggleRoleFilter(key, r.value)}
+                                className={cn(
+                                  'text-2xs px-2 py-0.5 rounded-md border font-medium transition-all',
+                                  allowed
+                                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-700'
+                                    : 'bg-[var(--color-bg-2)] text-[var(--color-text-3)] border-[var(--color-border)] line-through opacity-50'
+                                )}
+                              >
+                                {r.label}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
                     )
                   })}
@@ -734,7 +773,25 @@ export default function Settings() {
             </Button>
             <Button
               className="ml-auto"
-              onClick={() => save('whatsapp_automations', automations)}
+              onClick={async () => {
+                setSaving(true)
+                setSavedKey(null)
+                try {
+                  const { error } = await supabase.from('app_config').upsert([
+                    { key: 'whatsapp_automations', value: automations, updated_at: new Date().toISOString() },
+                    { key: 'whatsapp_role_filters', value: roleFilters, updated_at: new Date().toISOString() },
+                  ], { onConflict: 'key' })
+                  if (error) throw error
+                  invalidateWhatsAppConfig()
+                  invalidateConfigCache()
+                  setSavedKey('whatsapp_automations')
+                  setTimeout(() => setSavedKey(null), 3000)
+                } catch (err) {
+                  alert('Erro ao salvar: ' + err.message)
+                } finally {
+                  setSaving(false)
+                }
+              }}
               loading={saving}
             >
               <Save size={14} />
@@ -945,19 +1002,40 @@ export default function Settings() {
           {/* Publicações */}
           <Card>
             <CardSection title={<div className="flex items-center gap-2"><span>Publicações</span><span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-400">⚡ Imediato</span></div>}>
-              <div className="divide-y divide-[var(--color-border)]">
+              <div>
                 {[
                   { key: 'comunicadoPublicado', label: 'Comunicado publicado',  desc: 'Notifica os outros líderes quando um novo comunicado for publicado' },
                   { key: 'briefingPreenchido',  label: 'Briefing submetido',    desc: 'Avisa o Líder Geral quando um briefing de culto ou ensaio for preenchido' },
                 ].map(({ key, label, desc }) => {
                   const enabled = automations[key] !== undefined ? automations[key] : true
                   return (
-                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                      <div className="min-w-0 pr-4">
-                        <p className="text-sm text-[var(--color-text-1)]">{label}</p>
-                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                    <div key={key} className="py-3 first:pt-0 last:pb-0 border-b border-[var(--color-border)] last:border-0">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-[var(--color-text-1)] leading-snug">{label}</p>
+                          <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                        </div>
+                        <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
                       </div>
-                      <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {ROLE_OPTIONS.map(r => {
+                          const allowed = (roleFilters[key] ?? DEFAULT_ROLE_FILTERS[key] ?? []).includes(r.value)
+                          return (
+                            <button
+                              key={r.value}
+                              onClick={() => toggleRoleFilter(key, r.value)}
+                              className={cn(
+                                'text-2xs px-2 py-0.5 rounded-md border font-medium transition-all',
+                                allowed
+                                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-700'
+                                  : 'bg-[var(--color-bg-2)] text-[var(--color-text-3)] border-[var(--color-border)] line-through opacity-50'
+                              )}
+                            >
+                              {r.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   )
                 })}
@@ -968,7 +1046,7 @@ export default function Settings() {
           {/* Pastoral */}
           <Card>
             <CardSection title={<div className="flex items-center gap-2"><span>Pastoral</span><span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-400">⚡ Imediato</span></div>}>
-              <div className="divide-y divide-[var(--color-border)]">
+              <div>
                 {[
                   { key: 'visitanteIntegrado',  label: 'Visitante integrado',      desc: 'Notifica o Líder Geral quando um visitante for marcado como Integrado' },
                   { key: 'segundaVisita',        label: '2ª visita de visitante',   desc: 'Notifica quando o mesmo visitante retornar pela segunda vez' },
@@ -977,12 +1055,33 @@ export default function Settings() {
                 ].map(({ key, label, desc }) => {
                   const enabled = automations[key] !== undefined ? automations[key] : true
                   return (
-                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                      <div className="min-w-0 pr-4">
-                        <p className="text-sm text-[var(--color-text-1)]">{label}</p>
-                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                    <div key={key} className="py-3 first:pt-0 last:pb-0 border-b border-[var(--color-border)] last:border-0">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-[var(--color-text-1)] leading-snug">{label}</p>
+                          <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                        </div>
+                        <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
                       </div>
-                      <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {ROLE_OPTIONS.map(r => {
+                          const allowed = (roleFilters[key] ?? DEFAULT_ROLE_FILTERS[key] ?? []).includes(r.value)
+                          return (
+                            <button
+                              key={r.value}
+                              onClick={() => toggleRoleFilter(key, r.value)}
+                              className={cn(
+                                'text-2xs px-2 py-0.5 rounded-md border font-medium transition-all',
+                                allowed
+                                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-700'
+                                  : 'bg-[var(--color-bg-2)] text-[var(--color-text-3)] border-[var(--color-border)] line-through opacity-50'
+                              )}
+                            >
+                              {r.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   )
                 })}
@@ -993,18 +1092,39 @@ export default function Settings() {
           {/* Relatório Semanal */}
           <Card>
             <CardSection title={<div className="flex items-center gap-2"><span>Relatório</span><span className="text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">🕐 Agendado</span></div>}>
-              <div className="divide-y divide-[var(--color-border)]">
+              <div>
                 {[
                   { key: 'relatorioSemanal', label: 'Relatório de segunda-feira', desc: 'Envia ao Líder Geral toda segunda-feira: membros ativos, confirmações, visitantes e trocas da semana' },
                 ].map(({ key, label, desc }) => {
                   const enabled = automations[key] !== undefined ? automations[key] : false
                   return (
-                    <div key={key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                      <div className="min-w-0 pr-4">
-                        <p className="text-sm text-[var(--color-text-1)]">{label}</p>
-                        <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                    <div key={key} className="py-3 first:pt-0 last:pb-0 border-b border-[var(--color-border)] last:border-0">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-[var(--color-text-1)] leading-snug">{label}</p>
+                          <p className="text-2xs text-[var(--color-text-3)] mt-0.5">{desc}</p>
+                        </div>
+                        <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
                       </div>
-                      <Toggle checked={enabled} onChange={v => setAutomations(a => ({ ...a, [key]: v }))} />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {ROLE_OPTIONS.map(r => {
+                          const allowed = (roleFilters[key] ?? DEFAULT_ROLE_FILTERS[key] ?? []).includes(r.value)
+                          return (
+                            <button
+                              key={r.value}
+                              onClick={() => toggleRoleFilter(key, r.value)}
+                              className={cn(
+                                'text-2xs px-2 py-0.5 rounded-md border font-medium transition-all',
+                                allowed
+                                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-700'
+                                  : 'bg-[var(--color-bg-2)] text-[var(--color-text-3)] border-[var(--color-border)] line-through opacity-50'
+                              )}
+                            >
+                              {r.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   )
                 })}
@@ -1027,7 +1147,29 @@ export default function Settings() {
               }}>
               Desativar todas
             </Button>
-            <Button className="ml-auto" onClick={() => save('whatsapp_automations', automations)} loading={saving}>
+            <Button
+              className="ml-auto"
+              onClick={async () => {
+                setSaving(true)
+                setSavedKey(null)
+                try {
+                  const { error } = await supabase.from('app_config').upsert([
+                    { key: 'whatsapp_automations', value: automations, updated_at: new Date().toISOString() },
+                    { key: 'whatsapp_role_filters', value: roleFilters, updated_at: new Date().toISOString() },
+                  ], { onConflict: 'key' })
+                  if (error) throw error
+                  invalidateWhatsAppConfig()
+                  invalidateConfigCache()
+                  setSavedKey('whatsapp_automations')
+                  setTimeout(() => setSavedKey(null), 3000)
+                } catch (err) {
+                  alert('Erro ao salvar: ' + err.message)
+                } finally {
+                  setSaving(false)
+                }
+              }}
+              loading={saving}
+            >
               <Save size={14} />
               {savedKey === 'whatsapp_automations' ? '✓ Salvo!' : 'Salvar notificações'}
             </Button>

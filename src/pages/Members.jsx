@@ -632,7 +632,7 @@ export default function Members() {
     if (error) { alert(error.message); return }
     const member = pendentes.find(m => m.id === id)
     if (member?.whatsapp) {
-      await notify.membroAprovado(member.whatsapp, member.nome).catch(() => {})
+      await notify.membroAprovado(member.whatsapp, member.nome, member?.role).catch(() => {})
     }
     loadMembers()
   }

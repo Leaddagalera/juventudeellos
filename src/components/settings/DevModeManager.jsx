@@ -283,7 +283,7 @@ export default function DevModeManager() {
 
         case 'escala_publicada': {
           const { data: escalas } = await supabase
-            .from('escalas').select('user_id, domingo, subdepartamento, users(nome, whatsapp)')
+            .from('escalas').select('user_id, domingo, subdepartamento, users(nome, whatsapp, role)')
             .eq('ciclo_id', cicloId).order('domingo', { ascending: true })
           const byUser = {}
           for (const e of (escalas || [])) {
@@ -292,7 +292,7 @@ export default function DevModeManager() {
           }
           for (const { user, list } of Object.values(byUser)) {
             if (user?.whatsapp) {
-              await notify.escalaPublicada(user.whatsapp, user.nome, list).catch(() => {})
+              await notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role).catch(() => {})
             }
           }
           break
@@ -300,7 +300,7 @@ export default function DevModeManager() {
 
         case 'confirmacoes': {
           const { data: escalas } = await supabase
-            .from('escalas').select('user_id, domingo, subdepartamento, users(nome, whatsapp)')
+            .from('escalas').select('user_id, domingo, subdepartamento, users(nome, whatsapp, role)')
             .eq('ciclo_id', cicloId).order('domingo', { ascending: true })
           const byUser = {}
           for (const e of (escalas || [])) {
@@ -309,7 +309,7 @@ export default function DevModeManager() {
           }
           for (const { user, list } of Object.values(byUser)) {
             if (user?.whatsapp) {
-              await notify.escalaPublicada(user.whatsapp, user.nome, list).catch(() => {})
+              await notify.escalaPublicada(user.whatsapp, user.nome, list, user?.role).catch(() => {})
             }
           }
           break

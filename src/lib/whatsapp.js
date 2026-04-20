@@ -134,6 +134,42 @@ export const DEFAULT_CONDITIONS = {
   prazoDisponibilidadeDias: 7,   // days given to members to fill availability
 }
 
+// ── Role filters — which roles receive each message type ───────────────────
+
+const _LG   = ['lider_geral']
+const _LGF  = ['lider_geral', 'lider_funcao']
+const _ALL3 = ['lider_geral', 'lider_funcao', 'membro_serve']
+const _ALL4 = ['lider_geral', 'lider_funcao', 'membro_serve', 'membro_observador']
+
+export const DEFAULT_ROLE_FILTERS = {
+  briefingRegentesAberto:   _LGF,
+  briefingLideresAberto:    _LGF,
+  disponibilidadeAberta:    _ALL3,
+  lembreteMetadePrazo:      _ALL3,
+  lembrete90Prazo:          _ALL3,
+  encerramentoNaoPreencheu: _ALL3,
+  encerramentoResumoLider:  _LGF,
+  escalaPublicada:          _ALL3,
+  sextaSemConfirmacao:      _ALL3,
+  sabadoSemConfirmacao:     _ALL3,
+  sabadoAlertaLider:        _LGF,
+  trocaSolicitada:          _LGF,
+  trocaAprovada:            _ALL3,
+  trocaRecusada:            _ALL3,
+  segundaVisita:            _LGF,
+  tarjaNegativaAlerta:      _LGF,
+  aniversario:              _LG,
+  novoCadastroPendente:     _LGF,
+  midiaPendente:            _LGF,
+  membroAprovado:           _ALL4,   // observadores recebem a própria aprovação
+  cicloFaseAgradecimento:   _ALL3,
+  cicloFasePendencia:       _ALL3,
+  comunicadoPublicado:      _ALL4,   // comunicados são para todos
+  briefingPreenchido:       _LGF,
+  visitanteIntegrado:       _LGF,
+  relatorioSemanal:         _LG,
+}
+
 // ── Config cache invalidation ──────────────────────────────────────────────
 
 export function invalidateWhatsAppConfig() {
@@ -162,7 +198,7 @@ async function sendMessage(phone, text) {
 
 // ── Template-based send (checks automation toggle + uses custom template) ──
 
-async function sendTemplate(key, phone, vars) {
+async function sendTemplate(key, phone, vars, recipientRole = null) {
   const cfg = await loadAppConfig()
 
   const automations = cfg.whatsapp_automations || DEFAULT_AUTOMATIONS
@@ -184,6 +220,16 @@ async function sendTemplate(key, phone, vars) {
   if (hour < after || hour >= before) {
     console.log('[WhatsApp] outside send window:', hour, `(${after}–${before})`)
     return { skipped: true, reason: 'outside_window' }
+  }
+
+  // Check role filter (only when recipientRole is explicitly provided)
+  if (recipientRole !== null) {
+    const roleFilters = cfg.whatsapp_role_filters || {}
+    const allowed = roleFilters[key] ?? DEFAULT_ROLE_FILTERS[key]
+    if (allowed && !allowed.includes(recipientRole)) {
+      console.log('[WhatsApp] role filtered:', key, recipientRole)
+      return { skipped: true, reason: 'role_filtered' }
+    }
   }
 
   // Get template
@@ -235,11 +281,11 @@ export const notify = {
       naoPreencher: naoPreencher.join(', '),
     }),
 
-  escalaPublicada: (phone, nome, escalas) =>
+  escalaPublicada: (phone, nome, escalas, role) =>
     sendTemplate('escalaPublicada', phone, {
       nome,
       lista: escalas.map(e => `• ${e.domingo} — ${e.subdepartamento}`).join('\n'),
-    }),
+    }, role ?? null),
 
   sextaSemConfirmacao: (phone, nome, domingo) =>
     sendTemplate('sextaSemConfirmacao', phone, { nome, domingo }),
@@ -257,11 +303,11 @@ export const notify = {
   trocaSolicitada: (phone, solicitante, domingo, motivo) =>
     sendTemplate('trocaSolicitada', phone, { solicitante, domingo, motivo }),
 
-  trocaAprovada: (phone, nome, domingo) =>
-    sendTemplate('trocaAprovada', phone, { nome, domingo }),
+  trocaAprovada: (phone, nome, domingo, role) =>
+    sendTemplate('trocaAprovada', phone, { nome, domingo }, role ?? null),
 
-  trocaRecusada: (phone, nome, domingo, motivo) =>
-    sendTemplate('trocaRecusada', phone, { nome, domingo, motivo: motivo || 'Não informado' }),
+  trocaRecusada: (phone, nome, domingo, motivo, role) =>
+    sendTemplate('trocaRecusada', phone, { nome, domingo, motivo: motivo || 'Não informado' }, role ?? null),
 
   segundaVisita: (phone, visitante, data) =>
     sendTemplate('segundaVisita', phone, { visitante, data }),
@@ -278,8 +324,8 @@ export const notify = {
   midiaPendente: (phone, descricao, enviado_por) =>
     sendTemplate('midiaPendente', phone, { descricao, enviado_por }),
 
-  membroAprovado: (phone, nome) =>
-    sendTemplate('membroAprovado', phone, { nome }),
+  membroAprovado: (phone, nome, role) =>
+    sendTemplate('membroAprovado', phone, { nome }, role ?? null),
 
   cicloFaseAgradecimento: (phone, nome, tipo) =>
     sendTemplate('cicloFaseAgradecimento', phone, { nome, tipo }),

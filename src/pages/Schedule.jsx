@@ -133,15 +133,15 @@ export default function Schedule() {
 
       // Notify the person who requested the swap
       const { data: solicitante } = await supabase
-        .from('users').select('nome, whatsapp').eq('id', troca.escalas?.user_id).single()
+        .from('users').select('nome, whatsapp, role').eq('id', troca.escalas?.user_id).single()
       const domingo = troca.escalas?.domingo
         ? new Date(troca.escalas.domingo + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })
         : '—'
       if (solicitante?.whatsapp) {
         if (decision === 'aprovado') {
-          await notify.trocaAprovada(solicitante.whatsapp, solicitante.nome, domingo).catch(() => {})
+          await notify.trocaAprovada(solicitante.whatsapp, solicitante.nome, domingo, solicitante?.role).catch(() => {})
         } else {
-          await notify.trocaRecusada(solicitante.whatsapp, solicitante.nome, domingo, '').catch(() => {})
+          await notify.trocaRecusada(solicitante.whatsapp, solicitante.nome, domingo, '', solicitante?.role).catch(() => {})
         }
       }
     } catch (err) {
