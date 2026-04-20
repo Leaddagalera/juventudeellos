@@ -6,14 +6,6 @@ import { supabase } from './supabase.js'
 import { parseISO, getDate, differenceInDays } from 'date-fns'
 import { getSysConfig } from './sysConfig.js'
 
-// Número padrão de membros por subdepartamento por domingo
-const DEFAULT_SLOTS = {
-  louvor:   4,
-  regencia: 1,
-  ebd:      2,
-  recepcao: 2, // 1 homem + 1 mulher
-  midia:    1,
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +70,7 @@ export async function runScheduleEngine(cicloId) {
   // 0. Load system config
   const sysConfig = await getSysConfig()
   const ensaioWeek = sysConfig.ensaio_week ?? 2
+  const SLOTS = sysConfig.slots
 
   // 1. Load cycle
   const { data: ciclo, error: cicloErr } = await supabase
@@ -254,7 +247,7 @@ export async function runScheduleEngine(cicloId) {
       }
 
       // ── Generic subdepartamento
-      const slots = DEFAULT_SLOTS[subdep] || 1
+      const slots = SLOTS[subdep] ?? 1
       const sorted = sortByPriority(pool, historico || [], subdep)
       const selected = sorted.slice(0, slots)
 
