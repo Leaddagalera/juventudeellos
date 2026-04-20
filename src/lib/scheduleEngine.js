@@ -135,18 +135,9 @@ export async function runScheduleEngine(cicloId) {
 
   for (const domingo of domingos) {
     sundaysCovered[domingo] = {}
-
-    // ── Regência: ensaio Sunday is rehearsal (configurable week)
-    const ensaioRegencia = isEnsaioSunday(domingo, ensaioWeek)
+    sundaysCovered[domingo]._ensaio = isEnsaioSunday(domingo, ensaioWeek)
 
     for (const subdep of ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']) {
-      // Regência rehearsal Sunday: skip non-regência
-      if (ensaioRegencia && subdep !== 'regencia') {
-        alertas.push({ domingo, subdep, tipo: 'domingo_ensaio', info: 'Bloqueado para ensaio de regentes' })
-        sundaysCovered[domingo][subdep] = 'ensaio'
-        continue
-      }
-
       // Find briefing for this sunday + subdep
       const briefing = briefings?.find(b => b.domingo === domingo && b.subdepartamento === subdep)
       if (!briefing) {

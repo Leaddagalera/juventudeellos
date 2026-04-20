@@ -101,12 +101,13 @@ export default function Availability() {
     return Array.isArray(s) ? s.filter(Boolean) : [s].filter(Boolean)
   })()
 
-  // Returns subdeps active for a given Sunday, respecting the ensaio rule:
-  // on the ensaio Sunday only 'regencia' serves — everyone else has no slots.
+  // Returns subdeps active for a given Sunday.
+  // On the ensaio Sunday all normal subdeps are kept + 'ensaio' is appended for everyone.
   const activeSubdepsForDay = (dateStr) => {
     const ensaioWeek = sysConfig?.ensaio_week ?? 4
+    if (mySubdeps.length === 0) return []
     if (isEnsaioSunday(dateStr, ensaioWeek)) {
-      return mySubdeps.includes('regencia') ? ['regencia'] : []
+      return [...mySubdeps, 'ensaio']
     }
     return mySubdeps
   }
@@ -397,35 +398,31 @@ export default function Availability() {
             <p className="text-xs text-[var(--color-text-3)]">Nenhum subdepartamento vinculado ao seu perfil.</p>
           ) : (() => {
             const activeSubdeps = activeSubdepsForDay(selectedDay)
-            const isEnsaio = activeSubdeps.length < mySubdeps.length
-
             return (
             <div className="space-y-4">
-              {isEnsaio && (
-                <div className="flex items-center gap-2 rounded-xl bg-purple-500/10 border border-purple-500/30 px-3 py-2.5">
-                  <Music size={14} className="text-purple-400 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold text-purple-400">Domingo de Ensaio</p>
-                    <p className="text-2xs text-[var(--color-text-3)]">
-                      {activeSubdeps.length === 0
-                        ? 'Apenas a regência serve neste domingo — você não precisa preencher disponibilidade.'
-                        : 'Apenas a regência serve neste domingo.'}
-                    </p>
-                  </div>
-                </div>
-              )}
               {activeSubdeps.map(subdep => {
                 const key  = `${selectedDay}:${subdep}`
                 const disp = disponibilis[key]
-                const bri  = briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep)
-                const lines = briefContent(subdep, bri?.dados_json, selectedDay)
+                const isEnsaioCard = subdep === 'ensaio'
+                const bri  = !isEnsaioCard ? briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep) : null
+                const lines = !isEnsaioCard ? briefContent(subdep, bri?.dados_json, selectedDay) : []
 
                 return (
-                  <div key={subdep} className="rounded-xl border border-[var(--color-border)] overflow-hidden">
+                  <div key={subdep} className={cn(
+                    'rounded-xl border overflow-hidden',
+                    isEnsaioCard ? 'border-purple-500/40' : 'border-[var(--color-border)]'
+                  )}>
                     {/* Subdep header */}
-                    <div className="flex items-center justify-between px-3 py-2 bg-[var(--color-surface-2)]">
-                      <span className="text-xs font-semibold text-[var(--color-text-1)] uppercase tracking-wide">
-                        {subdepLabel(subdep)}
+                    <div className={cn(
+                      'flex items-center justify-between px-3 py-2',
+                      isEnsaioCard ? 'bg-purple-500/10' : 'bg-[var(--color-surface-2)]'
+                    )}>
+                      <span className={cn(
+                        'flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide',
+                        isEnsaioCard ? 'text-purple-400' : 'text-[var(--color-text-1)]'
+                      )}>
+                        {isEnsaioCard && <Music size={12} />}
+                        {isEnsaioCard ? 'Ensaio' : subdepLabel(subdep)}
                       </span>
                       {disp === true  ? <span className="flex items-center gap-1 text-2xs text-success-500 font-medium"><CheckCircle2 size={11} />Disponível</span> :
                        disp === false ? <span className="flex items-center gap-1 text-2xs text-danger-500 font-medium"><XCircle size={11} />Indisponível</span> :
@@ -433,8 +430,8 @@ export default function Availability() {
                     </div>
 
                     <div className="px-3 py-3 space-y-3">
-                      {/* Briefing content */}
-                      {lines.length > 0 ? (
+                      {/* Briefing content — só para subdeps normais */}
+                      {!isEnsaioCard && (lines.length > 0 ? (
                         <div className="rounded-lg bg-[var(--color-bg-2)] border border-[var(--color-border)] px-3 py-2.5 space-y-1.5">
                           {lines.map(({ label, value }) => (
                             <div key={label} className="flex gap-2 text-xs">
@@ -447,9 +444,9 @@ export default function Availability() {
                         <p className="text-xs text-[var(--color-text-3)] italic">
                           {bri ? 'Briefing preenchido · sem detalhes adicionais' : 'Briefing ainda não preenchido'}
                         </p>
-                      )}
+                      ))}
 
-                      {/* Availability toggle per subdep */}
+                      {/* Availability toggle */}
                       {inWindow ? (
                         <div className="grid grid-cols-2 gap-2 pt-1">
                           <button
