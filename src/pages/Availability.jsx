@@ -417,17 +417,6 @@ export default function Availability() {
                       {inWindow ? (
                         <div className="grid grid-cols-2 gap-2 pt-1">
                           <button
-                            onClick={() => toggleDisp(selectedDay, subdep, true)}
-                            className={cn(
-                              'py-2.5 rounded-xl text-xs font-medium transition-all border flex items-center justify-center gap-1.5',
-                              disp === true
-                                ? 'bg-success-500 text-white border-success-500'
-                                : 'bg-transparent text-[var(--color-text-2)] border-[var(--color-border)] hover:border-success-400 hover:text-success-600',
-                            )}
-                          >
-                            <CheckCircle2 size={13} /> Disponível
-                          </button>
-                          <button
                             onClick={() => toggleDisp(selectedDay, subdep, false)}
                             className={cn(
                               'py-2.5 rounded-xl text-xs font-medium transition-all border flex items-center justify-center gap-1.5',
@@ -437,6 +426,17 @@ export default function Availability() {
                             )}
                           >
                             <XCircle size={13} /> Indisponível
+                          </button>
+                          <button
+                            onClick={() => toggleDisp(selectedDay, subdep, true)}
+                            className={cn(
+                              'py-2.5 rounded-xl text-xs font-medium transition-all border flex items-center justify-center gap-1.5',
+                              disp === true
+                                ? 'bg-success-500 text-white border-success-500'
+                                : 'bg-transparent text-[var(--color-text-2)] border-[var(--color-border)] hover:border-success-400 hover:text-success-600',
+                            )}
+                          >
+                            <CheckCircle2 size={13} /> Disponível
                           </button>
                         </div>
                       ) : (
