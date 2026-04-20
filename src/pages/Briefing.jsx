@@ -74,6 +74,129 @@ function extractYouTubeId(url) {
   return null
 }
 
+// ── Fluxograma da Recepção ───────────────────────────────────────────────────
+function FBox({ title, sub, color = 'gray' }) {
+  const colors = {
+    lavender: 'bg-[#E8E4F8] border-[#C5BAF0] text-[#3D2E8C] dark:bg-[#2a2060] dark:border-[#6b58cc] dark:text-[#c9c0f5]',
+    orange:   'bg-[#FDF3E0] border-[#F5CC80] text-[#7A5200] dark:bg-[#3a2800] dark:border-[#c9961a] dark:text-[#f5d080]',
+    green:    'bg-[#D8F5EC] border-[#7DD9B8] text-[#1A6B4A] dark:bg-[#0d3325] dark:border-[#3db88a] dark:text-[#7dd9b8]',
+    red:      'bg-[#FCE4E4] border-[#F5A0A0] text-[#7A1A1A] dark:bg-[#3a0d0d] dark:border-[#cc4a4a] dark:text-[#f5a0a0]',
+    gray:     'bg-[var(--color-bg-2)] border-[var(--color-border)] text-[var(--color-text-2)]',
+    blue:     'bg-[#E0EDFB] border-[#90BDF0] text-[#1A4A7A] dark:bg-[#0d2540] dark:border-[#4a8acc] dark:text-[#90bdf0]',
+  }
+  return (
+    <div className={`rounded-lg border px-2.5 py-2 text-center flex-1 ${colors[color]}`}>
+      <p className="text-xs font-semibold leading-snug">{title}</p>
+      {sub && <p className="text-2xs mt-0.5 opacity-80 leading-snug">{sub}</p>}
+    </div>
+  )
+}
+function FArrow({ horizontal }) {
+  return horizontal
+    ? <div className="flex items-center flex-shrink-0 text-[var(--color-text-3)] px-0.5">→</div>
+    : <div className="flex justify-center py-0.5 text-[var(--color-text-3)] text-base leading-none">↓</div>
+}
+function FPhase({ title, children }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-3)] pt-1">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+function FluxogramaRecepcao() {
+  return (
+    <div className="space-y-2 text-xs select-none">
+      <div className="text-center pb-1 border-b border-[var(--color-border)]">
+        <p className="text-sm font-bold text-[var(--color-text-1)]">Fluxograma da Recepção</p>
+        <p className="text-2xs text-[var(--color-text-3)]">Juventude Ellos</p>
+      </div>
+
+      {/* Fase 1 */}
+      <FPhase title="Fase 1 — Antes do culto">
+        <div className="flex items-stretch gap-1">
+          <FBox color="gray" title="Chegada antecipada" sub="Equipe 30 min antes" />
+          <FArrow horizontal />
+          <FBox color="gray" title="Oração e alinhamento" sub="Uniforme, crachá, app aberto" />
+        </div>
+      </FPhase>
+
+      <FArrow />
+
+      {/* Fase 2 */}
+      <FPhase title="Fase 2 — Chegada do jovem">
+        <FBox color="lavender" title="Jovem cruza a porta" />
+        <FArrow />
+        <FBox color="lavender" title="Abordagem por gênero" sub="Rapaz aborda rapaz, moça aborda moça" />
+        <FArrow />
+        <FBox color="orange" title="App identifica o perfil" sub="1ª vez, retornante ou frequentador" />
+        <FArrow />
+        {/* Branches */}
+        <div className="flex items-start gap-1">
+          <div className="flex-1 space-y-1">
+            <p className="text-2xs text-center text-[var(--color-text-3)]">1ª vez</p>
+            <FBox color="red" title="Visitante novo" sub={'Cadastro no app\nKit de boas-vindas'} />
+          </div>
+          <div className="flex-1 space-y-1">
+            <p className="text-2xs text-center text-[var(--color-text-3)]">Retornante</p>
+            <FBox color="green" title="Retornante" sub={'Chama pelo nome\nQue bom te ver de volta'} />
+          </div>
+          <div className="flex-1 space-y-1">
+            <p className="text-2xs text-center text-[var(--color-text-3)]">Frequentador</p>
+            <FBox color="gray" title="Frequentador" sub={'Saudação rápida\nLugar habitual'} />
+          </div>
+        </div>
+        <FArrow />
+        <FBox color="red" title="Briefing de entrada" sub={'Banheiros e bebedouro · Dinâmica do culto\nAssento sugerido · 2 fileiras atrás do conjunto'} />
+        <FArrow />
+        <FBox color="green" title="Apresenta ao líder" sub="Só retornantes · Conexão pessoal e oração breve" />
+      </FPhase>
+
+      <FArrow />
+
+      {/* Fase 3 */}
+      <FPhase title="Fase 3 — Durante o culto">
+        <FBox color="green" title="Equipe permanece em função" sub={'Monitora atrasados · Observa visitantes que saem\nAtende necessidades pontuais'} />
+      </FPhase>
+
+      <FArrow />
+
+      {/* Fase 4 */}
+      <FPhase title="Fase 4 — Despedida e registro">
+        <FBox color="lavender" title="Despedida personalizada" sub="Agradece a presença, convida para o próximo domingo" />
+        <FArrow />
+        <FBox color="lavender" title="Confirmar contato no app" sub="Valida WhatsApp e Instagram · Define responsável pelo follow-up" />
+        <FArrow />
+        <FBox color="gray" title="Reunião rápida da equipe" sub="Repassa visitantes e responsáveis" />
+      </FPhase>
+
+      <FArrow />
+
+      {/* Fase 5 */}
+      <FPhase title="Fase 5 — Follow-up da semana">
+        <div className="flex items-start gap-1">
+          <FBox color="red" title="Seg ou Ter" sub="Áudio personalizado no WhatsApp (40–60s)" />
+          <FBox color="blue" title="Sábado" sub="Lembrete com card ou arte do tema" />
+        </div>
+        <FArrow />
+        <FBox color="orange" title="Voltou no domingo seguinte?" />
+        <FArrow />
+        <div className="flex items-start gap-1">
+          <div className="flex-1 space-y-1">
+            <p className="text-2xs text-center text-[var(--color-text-3)]">Sim</p>
+            <FBox color="green" title="Integração" sub="Convida para GC, ministério ou discipulado" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <p className="text-2xs text-center text-[var(--color-text-3)]">Não voltou</p>
+            <FBox color="red" title="Resgate ativo" sub="Mensagem de cuidado sem cobrança, só presença" />
+          </div>
+        </div>
+      </FPhase>
+    </div>
+  )
+}
+
 const SUBDEPS = ['regencia', 'ebd', 'recepcao', 'midia']
 
 const SUBDEP_COLORS = {
@@ -374,6 +497,10 @@ function BriefingModal({ open, onClose, briefing, cicloId, domingo, subdep, read
         {/* Recepção */}
         {subdep === 'recepcao' && (
           <div className="space-y-3">
+            {/* Fluxograma sempre visível */}
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-2)] p-3 max-h-[55vh] overflow-y-auto">
+              <FluxogramaRecepcao />
+            </div>
             <Input label="Postos" placeholder="Ex: Entrada principal, lateral" value={form.postos || ''} onChange={e => set('postos', e.target.value)} disabled={readOnly} />
             <Input label="Quantidade de pessoas" type="number" min="2" value={form.quantidade || 2} onChange={e => set('quantidade', Number(e.target.value))} disabled={readOnly} />
             <Textarea label="Observações" value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} rows={2} disabled={readOnly} />
