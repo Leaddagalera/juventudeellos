@@ -44,6 +44,9 @@ function sundayTheme(dateStr) {
   return themes[count - 1] || 'Livre'
 }
 
+// Subdeps que exibem o briefing da regência em vez do próprio
+const SUBDEP_USES_REGENCIA = ['louvor']
+
 function briefContent(subdep, dados, domingo) {
   if (!dados) return []
   const lines = []
@@ -162,10 +165,14 @@ export default function Availability() {
       }
       setDomingos(suns)
 
-      // Load briefings: user's subdeps + ensaio briefings (tipo='ensaio', for all members)
+      // Load briefings: user's subdeps + regencia (for subdeps that use it) + ensaio
+      const needsRegencia = mySubdeps.some(s => SUBDEP_USES_REGENCIA.includes(s))
+      const briSubdepsToFetch = needsRegencia && !mySubdeps.includes('regencia')
+        ? [...mySubdeps, 'regencia']
+        : mySubdeps
       const [{ data: subdepBris }, { data: ensaioBris }] = await Promise.all([
-        mySubdeps.length > 0
-          ? supabase.from('briefings').select('*').eq('ciclo_id', c.id).in('subdepartamento', mySubdeps).neq('tipo', 'ensaio')
+        briSubdepsToFetch.length > 0
+          ? supabase.from('briefings').select('*').eq('ciclo_id', c.id).in('subdepartamento', briSubdepsToFetch).neq('tipo', 'ensaio')
           : { data: [] },
         supabase.from('briefings').select('*').eq('ciclo_id', c.id).eq('tipo', 'ensaio'),
       ])
@@ -415,10 +422,12 @@ export default function Availability() {
                 const key  = `${selectedDay}:${subdep}`
                 const disp = disponibilis[key]
                 const isEnsaioCard = subdep === 'ensaio'
+                // Subdeps como 'louvor' exibem o briefing da regência
+                const briSubdep = (!isEnsaioCard && SUBDEP_USES_REGENCIA.includes(subdep)) ? 'regencia' : subdep
                 const bri  = isEnsaioCard
                   ? briefings.find(b => b.domingo === selectedDay && b.tipo === 'ensaio')
-                  : briefings.find(b => b.domingo === selectedDay && b.subdepartamento === subdep && b.tipo !== 'ensaio')
-                const lines = briefContent(subdep, bri?.dados_json, selectedDay)
+                  : briefings.find(b => b.domingo === selectedDay && b.subdepartamento === briSubdep && b.tipo !== 'ensaio')
+                const lines = briefContent(briSubdep, bri?.dados_json, selectedDay)
 
                 return (
                   <div key={subdep} className={cn(
