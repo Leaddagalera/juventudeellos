@@ -179,16 +179,23 @@ export default function MembroDashboard() {
   const escalasFuturas  = escalas.filter(e => e.domingo >= today)
   const escalasPendConf = escalasFuturas.filter(e => e.status_confirmacao === 'pendente')
 
-  // Progresso do ciclo
+  // Progresso do ciclo — baseado na fase atual, não em dias de serviço
   const cycleDay = ciclo
     ? Math.floor((Date.now() - new Date(ciclo.inicio + 'T00:00:00').getTime()) / 86_400_000) + 1
     : null
   const cycleTotalDays = ciclo
     ? Math.max(1, Math.round((new Date(ciclo.fim + 'T00:00:00') - new Date(ciclo.inicio + 'T00:00:00')) / 86_400_000))
     : 45
-  const cycleProgress = cycleDay && cycleDay > 0
-    ? Math.min(100, Math.round((cycleDay / cycleTotalDays) * 100))
-    : 0
+  const PHASE_PROGRESS = {
+    briefing_regente: 10,
+    briefing_lider:   22,
+    disponibilidade:  45,
+    gerando_escala:   58,
+    escala_publicada: 75,
+    confirmacoes:     90,
+    encerrado:        100,
+  }
+  const cycleProgress = ciclo ? (PHASE_PROGRESS[ciclo.status] ?? 0) : 0
 
   // Status de disponibilidade conforme fase do ciclo
   const faseAntesDsip    = ['briefing_regente', 'briefing_lider'].includes(ciclo?.status)
