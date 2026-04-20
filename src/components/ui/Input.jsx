@@ -71,8 +71,9 @@ export function Toggle({ checked, onChange, label, disabled }) {
   )
 }
 
-export function ChipSelect({ options, selected = [], onChange, max }) {
+export function ChipSelect({ options, selected = [], onChange, max, disabled }) {
   const toggle = (val) => {
+    if (disabled) return
     if (selected.includes(val)) {
       onChange(selected.filter(v => v !== val))
     } else {
@@ -82,7 +83,7 @@ export function ChipSelect({ options, selected = [], onChange, max }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className={cn('flex flex-wrap gap-2', disabled && 'opacity-50 cursor-not-allowed pointer-events-none')}>
       {options.map(opt => {
         const isSelected = selected.includes(opt.value)
         return (
@@ -90,10 +91,8 @@ export function ChipSelect({ options, selected = [], onChange, max }) {
             key={opt.value}
             type="button"
             onClick={() => toggle(opt.value)}
-            className={cn(
-              'chip',
-              isSelected && 'selected'
-            )}
+            disabled={disabled}
+            className={cn('chip', isSelected && 'selected')}
           >
             {opt.label}
           </button>
