@@ -199,6 +199,14 @@ export default function MembroDashboard() {
     ? (daysUntilService > 0 ? `${daysUntilService}d para o serviço · ${cycleProgress}%` : `${cycleProgress}%`)
     : null
 
+  // Cycle title: "Planejamento: dd/MM - dd/MM | Serviço: dd/MM - dd/MM"
+  const fmtD = (d) => new Date(typeof d === 'string' && !d.includes('T') ? d + 'T00:00:00' : d)
+    .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  const planEndDate = ciclo ? (() => { const d = new Date(ciclo.inicio + 'T00:00:00'); d.setDate(d.getDate() - 1); return d })() : null
+  const cycleTitle = ciclo
+    ? `Planejamento: ${fmtD(ciclo.created_at)} - ${fmtD(planEndDate)} | Serviço: ${fmtD(ciclo.inicio)} - ${fmtD(ciclo.fim)}`
+    : null
+
   // Status de disponibilidade conforme fase do ciclo
   const faseAntesDsip    = ['briefing_regente', 'briefing_lider'].includes(ciclo?.status)
   const faseDisponib     = ciclo?.status === 'disponibilidade'
@@ -236,7 +244,7 @@ export default function MembroDashboard() {
         <Card className="!p-3">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-medium text-[var(--color-text-2)]">
-              Ciclo — {new Date(ciclo.inicio).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+              {cycleTitle}
             </span>
             <span className="text-xs text-[var(--color-text-3)]">{cycleProgressLabel}</span>
           </div>
