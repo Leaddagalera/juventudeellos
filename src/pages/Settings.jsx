@@ -139,9 +139,12 @@ export default function Settings() {
         .in('key', ['whatsapp_connection', 'whatsapp_messages', 'whatsapp_automations', 'whatsapp_conditions', 'whatsapp_role_filters', 'app_url'])
 
       const cfg = {}
-      for (const row of (data || [])) cfg[row.key] = row.value
+      for (const row of (data || [])) {
+        // value é coluna text — parse JSON para recuperar objetos/números
+        try { cfg[row.key] = JSON.parse(row.value) } catch { cfg[row.key] = row.value }
+      }
 
-      if (cfg.whatsapp_connection) setConnection(cfg.whatsapp_connection)
+      if (cfg.whatsapp_connection && typeof cfg.whatsapp_connection === 'object') setConnection(cfg.whatsapp_connection)
       if (cfg.whatsapp_messages)   setMessages(cfg.whatsapp_messages)
       if (cfg.app_url)             setAppUrl(cfg.app_url)
       setAutomations({ ...DEFAULT_AUTOMATIONS, ...(cfg.whatsapp_automations || {}) })
@@ -161,9 +164,11 @@ export default function Settings() {
     setSaving(true)
     setSavedKey(null)
     try {
+      // value é coluna text — serializar objetos para JSON string antes de salvar
+      const serialized = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)
       const { error } = await supabase
         .from('app_config')
-        .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+        .upsert({ key, value: serialized, updated_at: new Date().toISOString() }, { onConflict: 'key' })
       if (error) throw error
 
       invalidateWhatsAppConfig()

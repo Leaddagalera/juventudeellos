@@ -82,7 +82,9 @@ export async function getSysConfig() {
       .in('key', SYS_KEYS)
 
     const map = {}
-    for (const row of (data || [])) map[row.key] = row.value
+    for (const row of (data || [])) {
+      try { map[row.key] = JSON.parse(row.value) } catch { map[row.key] = row.value }
+    }
 
     _cache = {
       cycle_duration:     map.sys_cycle_duration     ?? SYS_DEFAULTS.cycle_duration,
