@@ -112,16 +112,16 @@ export default function LiderGeralDashboard() {
         { data: comunicadosData },
         ...saudeResults
       ] = await Promise.all([
-        // Métricas
-        supabase.from('users').select('*', { count: 'exact', head: true }).eq('ativo', true).eq('role', 'membro_serve'),
+        // Métricas — todos os membros ativos (todos os roles aprovados)
+        supabase.from('users').select('*', { count: 'exact', head: true }).eq('ativo', true).not('role', 'is', null),
         supabase.from('escalas').select('*', { count: 'exact', head: true }).eq('status_confirmacao', 'confirmado').eq('ciclo_id', cicloId),
         supabase.from('conteudo_login').select('*', { count: 'exact', head: true }).eq('status', 'pendente'),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('ativo', false),
-        // Disponibilidade
+        // Disponibilidade — todos os membros ativos que deveriam preencher
         cicloId
           ? supabase.from('disponibilidades').select('user_id').eq('ciclo_id', cicloId)
           : Promise.resolve({ data: [] }),
-        supabase.from('users').select('id').eq('ativo', true).eq('role', 'membro_serve'),
+        supabase.from('users').select('id').eq('ativo', true).not('role', 'is', null),
         // Alertas
         supabase.from('users').select('nome, tarja, tarja_atualizada_em').eq('ativo', true).in('tarja', ['nicodemos', 'prodigo']),
         // Aniversariantes
