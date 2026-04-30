@@ -245,15 +245,31 @@ export async function runScheduleEngine(cicloId) {
 
         for (const instrumento of needed) {
           if (coveredInstruments.has(instrumento)) continue // já coberto por solista do briefing
-          const candidate = sortByPriority(
-            pool.filter(m =>
+
+          // Ordenação para matching de instrumento:
+          // 1º Especialização: quem toca MENOS instrumentos tem prioridade no próprio
+          //    (violonista nativo antes do curinga que também sabe violão)
+          // 2º Rotatividade: quem serviu há mais tempo no louvor
+          // 3º Rotatividade global: quem serviu há mais tempo em qualquer subdep
+          const candidates = pool
+            .filter(m =>
               !selectedIds.has(m.id) &&
               Array.isArray(m.instrumento) &&
               m.instrumento.includes(instrumento)
-            ),
-            historico || [],
-            subdep
-          )[0]
+            )
+            .sort((a, b) => {
+              const specA = a.instrumento?.length ?? 99
+              const specB = b.instrumento?.length ?? 99
+              if (specA !== specB) return specA - specB
+
+              const lastSubdepA = lastServiceDateForSubdep(a.id, subdep, historico || [])
+              const lastSubdepB = lastServiceDateForSubdep(b.id, subdep, historico || [])
+              if (lastSubdepA !== lastSubdepB) return lastSubdepA.localeCompare(lastSubdepB)
+
+              return lastServiceDate(a.id, historico || []).localeCompare(
+                     lastServiceDate(b.id, historico || []))
+            })
+          const candidate = candidates[0]
           if (candidate) {
             selectedIds.add(candidate.id)
             selected.push({ member: candidate, instrumento })
