@@ -23,7 +23,7 @@ import { Input } from '../ui/Input.jsx'
 import { Badge } from '../ui/Badge.jsx'
 import { Modal } from '../ui/Modal.jsx'
 import { SYS_DEFAULTS, getSysConfig, invalidateSysConfig } from '../../lib/sysConfig.js'
-import { isEnsaioSunday } from '../../lib/scheduleEngine.js'
+import { isEnsaioSunday, runScheduleEngine } from '../../lib/scheduleEngine.js'
 import { cn, subdepLabel } from '../../lib/utils.js'
 import { notify, DEFAULT_CONDITIONS } from '../../lib/whatsapp.js'
 import { loadAppConfig } from '../../lib/config.js'
@@ -552,8 +552,10 @@ export default function DevModeManager() {
   const [notifying, setNotifying] = useState(false)
 
   // ── Schedule generator state
-  const [generating, setGenerating] = useState(false)
-  const [genResult,  setGenResult]  = useState(null)   // { cicloId, count } | null
+  const [generating,    setGenerating]    = useState(false)
+  const [genResult,     setGenResult]     = useState(null)   // { cicloId, count } | null
+  const [regenerating,  setRegenerating]  = useState(false)
+  const [regenResult,   setRegenResult]   = useState(null)   // { cicloId, alerts } | null
 
   // ── Cycle CRUD ────────────────────────────────────────────────────────────
 
@@ -718,6 +720,25 @@ export default function DevModeManager() {
     }
   }
 
+  // ── Regenerar com motor completo (runScheduleEngine) ────────────────────
+  const regenerateSchedule = async (cycle) => {
+    if (!confirm(`Regenerar escala com o motor completo para o ciclo ${fmtDate(cycle.inicio)} – ${fmtDate(cycle.fim)}?\n\nIsto apagará e recriará toda a escala usando as regras completas (instrumentos, briefings, rotatividade).`)) return
+    setRegenerating(true)
+    setRegenResult(null)
+    try {
+      const result = await runScheduleEngine(cycle.id)
+      if (!result?.success && result?.reason !== 'cobertura_insuficiente') {
+        throw new Error(result?.error || 'Erro desconhecido no motor')
+      }
+      setRegenResult({ cicloId: cycle.id, alerts: result?.alertas || [] })
+      await loadCycles()
+    } catch (err) {
+      alert('Erro ao regenerar escala: ' + err.message)
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   // ── Sys config save ───────────────────────────────────────────────────────
 
   const saveSysConfig = async () => {
@@ -878,12 +899,21 @@ export default function DevModeManager() {
                               size="sm" variant="secondary"
                               onClick={() => generateSchedule(cy)}
                               loading={generating && genResult?.cicloId !== cy.id}
-                              disabled={generating}
+                              disabled={generating || regenerating}
                               className="flex-1"
                             >
                               <Shuffle size={12} /> Gerar Escala
                             </Button>
                           )}
+                          <Button
+                            size="sm" variant="secondary"
+                            onClick={() => regenerateSchedule(cy)}
+                            loading={regenerating && regenResult?.cicloId !== cy.id}
+                            disabled={generating || regenerating}
+                            className="flex-1"
+                          >
+                            <RefreshCw size={12} /> Regenerar (motor completo)
+                          </Button>
                           {nextStatus && nextStatus !== 'escala_publicada' && (
                             <Button
                               size="sm"
@@ -904,6 +934,26 @@ export default function DevModeManager() {
                           <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-1)] bg-success-500/10 border border-success-500/30 rounded-lg px-3 py-2">
                             <CheckCircle size={13} className="text-success-500 flex-shrink-0" />
                             Escala gerada: <strong>{genResult.count}</strong> escalações — ciclo avançado para &quot;Escala publicada&quot;
+                          </div>
+                        )}
+                        {regenResult?.cicloId === cy.id && (
+                          <div className={`flex items-start gap-1.5 text-xs rounded-lg px-3 py-2 border ${
+                            regenResult.alerts?.length > 0
+                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200'
+                              : 'bg-success-500/10 border-success-500/30 text-[var(--color-text-1)]'
+                          }`}>
+                            {regenResult.alerts?.length > 0
+                              ? <AlertTriangle size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                              : <CheckCircle size={13} className="text-success-500 flex-shrink-0 mt-0.5" />
+                            }
+                            <div>
+                              <p className="font-semibold">Escala regenerada com o motor completo</p>
+                              {regenResult.alerts?.length > 0 && (
+                                <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                                  {regenResult.alerts.map((a, i) => <li key={i}>{a.mensagem || JSON.stringify(a)}</li>)}
+                                </ul>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
