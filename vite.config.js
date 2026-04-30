@@ -6,44 +6,39 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // injectManifest: usa src/sw.js como base e injeta o manifesto de precache.
+      // Isso permite adicionar handlers customizados (push, notificationclick)
+      // que não são possíveis com a estratégia generateSW.
+      strategies:   'injectManifest',
+      srcDir:       'src',
+      filename:     'sw.js',
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+
+      injectManifest: {
+        // Garante que __WB_MANIFEST é substituído corretamente
+        injectionPoint: '__WB_MANIFEST',
+        // Inclui todos os assets estáticos no precache
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+      },
+
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+
       manifest: {
-        name: 'Ellos Juventude',
-        short_name: 'Ellos',
-        description: 'Sistema de gestão do departamento de jovens',
-        theme_color: '#0F2A4A',
+        name:             'Ellos Juventude',
+        short_name:       'Ellos',
+        description:      'Sistema de gestão do departamento de jovens',
+        theme_color:      '#0F2A4A',
         background_color: '#0F2A4A',
-        display: 'standalone',
-        orientation: 'portrait',
+        display:          'standalone',
+        orientation:      'portrait',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' }
-        ]
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
       },
-      workbox: {
-        // Activate new SW immediately and take control of all clients.
-        // Without this, the old cached JS runs until all tabs are closed.
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            // Auth endpoints must NEVER be cached — stale tokens cause infinite loading
-            urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/.*/i,
-            handler: 'NetworkOnly',
-          },
-          {
-            // Non-auth Supabase API calls (DB queries) — network-first, short TTL
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'supabase-cache', expiration: { maxEntries: 50, maxAgeSeconds: 60 } }
-          }
-        ]
-      }
-    })
+    }),
   ],
   resolve: {
-    alias: { '@': '/src' }
-  }
+    alias: { '@': '/src' },
+  },
 })

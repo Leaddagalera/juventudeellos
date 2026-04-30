@@ -99,7 +99,22 @@ export default function Announcements() {
       if (error) throw error
       setTexto(''); setDest('todos'); setFixDias('')
       loadComunicados()
-      // Notificar líderes sobre novo comunicado (exceto o autor)
+
+      const preview   = texto.trim().slice(0, 100) + (texto.trim().length > 100 ? '...' : '')
+      const destLabel = DEST_OPTS.find(o => o.value === dest)?.label || dest
+
+      // Web Push — dispara em background, não bloqueia o fluxo
+      supabase.functions.invoke('send-push', {
+        body: {
+          title:        'Novo comunicado',
+          body:         preview,
+          url:          '/announcements',
+          destinatario: dest,
+          tag:          'comunicado',
+        },
+      }).catch(e => console.warn('[push] falha ao enviar:', e))
+
+      // WhatsApp — notifica líderes (exceto o autor)
       const { data: lideres } = await supabase
         .from('users')
         .select('nome, whatsapp')
@@ -107,8 +122,6 @@ export default function Announcements() {
         .neq('id', profile.id)
         .eq('ativo', true)
         .not('whatsapp', 'is', null)
-      const preview = texto.trim().slice(0, 100) + (texto.trim().length > 100 ? '...' : '')
-      const destLabel = DEST_OPTS.find(o => o.value === dest)?.label || dest
       for (const lider of (lideres || [])) {
         await notify.comunicadoPublicado(lider.whatsapp, preview, destLabel)
       }

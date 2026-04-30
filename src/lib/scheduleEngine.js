@@ -90,12 +90,12 @@ export async function runScheduleEngine(cicloId) {
     .from('disponibilidades').select('*').eq('ciclo_id', cicloId)
   if (e2) throw e2
 
-  // 5. Load active serve-members with full profile
+  // 5. Load active members with full profile — membro_serve + líderes que também servem
   const { data: membros, error: e3 } = await supabase
     .from('users')
     .select('*')
     .eq('ativo', true)
-    .eq('role', 'membro_serve')
+    .in('role', ['membro_serve', 'lider_geral', 'lider_funcao'])
   if (e3) throw e3
 
   // 6. Load recent schedule history (configurable window for priority)
@@ -137,14 +137,68 @@ export async function runScheduleEngine(cicloId) {
     sundaysCovered[domingo] = {}
     sundaysCovered[domingo]._ensaio = isEnsaioSunday(domingo, ensaioWeek)
 
-    for (const subdep of ['louvor', 'regencia', 'ebd', 'recepcao', 'midia']) {
+    // Regência é processada primeiro para que soloistas já estejam em escalaRows
+    // antes do matching de instrumentos do Louvor
+    for (const subdep of ['regencia', 'louvor', 'ebd', 'recepcao', 'midia']) {
       // Find briefing for this sunday + subdep
       // Louvor usa o briefing da regência (mesmo registro, sem duplicata)
+      // Exclui tipo='ensaio' para não confundir com o briefing normal do domingo
       const briefingSubdep = subdep === 'louvor' ? 'regencia' : subdep
-      const briefing = briefings?.find(b => b.domingo === domingo && b.subdepartamento === briefingSubdep)
+      const briefing = briefings?.find(
+        b => b.domingo === domingo && b.subdepartamento === briefingSubdep && b.tipo !== 'ensaio'
+      )
       if (!briefing) {
         alertas.push({ domingo, subdep, tipo: 'sem_briefing', info: 'Briefing não preenchido' })
         sundaysCovered[domingo][subdep] = 'sem_briefing'
+        continue
+      }
+
+      // ── Regência: pinned do briefing — regente + solistas, sem filtro de disponibilidade ──
+      // Extrai também do briefing de ensaio (tipo='ensaio') quando existir
+      if (subdep === 'regencia') {
+        const allRegBriefings = (briefings || []).filter(
+          b => b.domingo === domingo && b.subdepartamento === 'regencia'
+        )
+
+        // Deduplica por chave `userId:rowSubdep`
+        const pinned = new Map()
+
+        for (const b of allRegBriefings) {
+          const d = b.dados_json || {}
+
+          if (b.tipo === 'ensaio' && Array.isArray(d.hinos)) {
+            // Domingo de ensaio: extrair de cada hino individualmente
+            for (const hino of d.hinos) {
+              if (hino.regente_id)   pinned.set(`${hino.regente_id}:regencia`,  { user_id: hino.regente_id,   subdepartamento: 'regencia' })
+              if (hino.solista_1_id) pinned.set(`${hino.solista_1_id}:louvor`,  { user_id: hino.solista_1_id, subdepartamento: 'louvor'   })
+              if (hino.solista_2_id) pinned.set(`${hino.solista_2_id}:louvor`,  { user_id: hino.solista_2_id, subdepartamento: 'louvor'   })
+            }
+          } else {
+            // Domingo normal: regente + até 2 solistas
+            if (d.regente_id) pinned.set(`${d.regente_id}:regencia`, { user_id: d.regente_id, subdepartamento: 'regencia' })
+            if (d.solo_1_id)  pinned.set(`${d.solo_1_id}:louvor`,   { user_id: d.solo_1_id,  subdepartamento: 'louvor'   })
+            if (d.solo_2_id)  pinned.set(`${d.solo_2_id}:louvor`,   { user_id: d.solo_2_id,  subdepartamento: 'louvor'   })
+          }
+        }
+
+        if (pinned.size === 0) {
+          alertas.push({ domingo, subdep, tipo: 'sem_cobertura', info: 'Regente/solistas não preenchidos no briefing' })
+          sundaysCovered[domingo][subdep] = 'sem_cobertura'
+          continue
+        }
+
+        for (const { user_id, subdepartamento: rowSubdep } of pinned.values()) {
+          escalaRows.push({
+            ciclo_id: cicloId,
+            user_id,
+            domingo,
+            subdepartamento: rowSubdep,
+            status_confirmacao: 'pendente',
+          })
+          markAssigned(user_id, rowSubdep, domingo)
+        }
+
+        sundaysCovered[domingo][subdep] = 'ok'
         continue
       }
 
@@ -172,13 +226,25 @@ export async function runScheduleEngine(cicloId) {
       }
 
       // ── Louvor: cruzar instrumento necessário × instrumento do membro
+      // selectedIds é pré-populado com soloistas já escalados via briefing de regência
       if (subdep === 'louvor' && briefing.dados_json?.instrumentos_necessarios) {
         const needed = briefing.dados_json.instrumentos_necessarios
-        // For each needed instrument, find at least one available member
-        const selectedIds = new Set()
+
+        // Soloistas pinned na regência já adicionados a escalaRows — não duplicar
+        const selectedIds = new Set(
+          escalaRows
+            .filter(r => r.domingo === domingo && r.subdepartamento === 'louvor')
+            .map(r => r.user_id)
+        )
+        // Instrumentos já cobertos pelos soloistas pinned
+        const coveredInstruments = new Set(
+          [...selectedIds].flatMap(uid => membros.find(m => m.id === uid)?.instrumento ?? [])
+        )
+
         const selected = []
 
         for (const instrumento of needed) {
+          if (coveredInstruments.has(instrumento)) continue // já coberto por solista do briefing
           const candidate = sortByPriority(
             pool.filter(m =>
               !selectedIds.has(m.id) &&
@@ -211,16 +277,23 @@ export async function runScheduleEngine(cicloId) {
           markAssigned(member.id, subdep, domingo)
         }
 
-        sundaysCovered[domingo][subdep] = selected.length > 0 ? 'ok' : 'sem_cobertura'
+        // Louvor tem cobertura se há instrumentistas disponíveis OU soloistas já pinned
+        const pinnedLouvorCount = escalaRows.filter(
+          r => r.domingo === domingo && r.subdepartamento === 'louvor'
+        ).length
+        sundaysCovered[domingo][subdep] = (selected.length > 0 || pinnedLouvorCount > 0) ? 'ok' : 'sem_cobertura'
         continue
       }
 
-      // ── Recepção: obrigatório 1 homem + 1 mulher
+      // ── Recepção: idealmente 1 homem + 1 mulher
       if (subdep === 'recepcao') {
         const homens   = sortByPriority(pool.filter(m => m.genero === 'M'), historico || [], subdep)
         const mulheres = sortByPriority(pool.filter(m => m.genero === 'F'), historico || [], subdep)
 
-        if (homens.length === 0 || mulheres.length === 0) {
+        const temGenero = pool.some(m => m.genero === 'M' || m.genero === 'F')
+
+        if (temGenero && (homens.length === 0 || mulheres.length === 0)) {
+          // Gênero cadastrado mas faltando um dos dois — bloqueia
           alertas.push({
             domingo, subdep,
             tipo: 'recepcao_incompleta',
@@ -230,12 +303,30 @@ export async function runScheduleEngine(cicloId) {
           continue
         }
 
-        escalaRows.push(
-          { ciclo_id: cicloId, user_id: homens[0].id,   domingo, subdepartamento: subdep, status_confirmacao: 'pendente' },
-          { ciclo_id: cicloId, user_id: mulheres[0].id, domingo, subdepartamento: subdep, status_confirmacao: 'pendente' },
-        )
-        markAssigned(homens[0].id, subdep, domingo)
-        markAssigned(mulheres[0].id, subdep, domingo)
+        let selecionados
+        if (temGenero) {
+          // Par completo por gênero
+          selecionados = [homens[0], mulheres[0]]
+        } else {
+          // Gênero não cadastrado — fallback: top 2 por rotatividade + alerta não-crítico
+          alertas.push({
+            domingo, subdep,
+            tipo: 'recepcao_sem_genero',
+            info: 'Gênero não cadastrado — escalado por rotatividade'
+          })
+          selecionados = sortByPriority(pool, historico || [], subdep).slice(0, SLOTS[subdep] ?? 2)
+        }
+
+        if (selecionados.length === 0) {
+          alertas.push({ domingo, subdep, tipo: 'sem_cobertura', info: 'Sem disponíveis' })
+          sundaysCovered[domingo][subdep] = 'sem_cobertura'
+          continue
+        }
+
+        for (const m of selecionados) {
+          escalaRows.push({ ciclo_id: cicloId, user_id: m.id, domingo, subdepartamento: subdep, status_confirmacao: 'pendente' })
+          markAssigned(m.id, subdep, domingo)
+        }
         sundaysCovered[domingo][subdep] = 'ok'
         continue
       }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save, LogOut, Moon, Sun, Camera, Loader2 } from 'lucide-react'
+import { Save, LogOut, Moon, Sun, Camera, Loader2, Bell, BellOff } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { Card, CardSection, Avatar } from '../components/ui/Card.jsx'
@@ -7,6 +7,7 @@ import { Badge, SubdepBadge, RoleBadge, TarjaBadge } from '../components/ui/Badg
 import { Button } from '../components/ui/Button.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
 import { formatDate, subdepLabel, getAge } from '../lib/utils.js'
+import { getPushState, subscribeToPush, unsubscribeFromPush } from '../lib/pushNotifications.js'
 
 const ESTADO_CIVIL_LABELS = {
   solteiro: 'Solteiro(a)', casado: 'Casado(a)', divorciado: 'Divorciado(a)', viuvo: 'Viúvo(a)'
@@ -29,10 +30,40 @@ export default function Profile() {
     estado_civil:   profile?.estado_civil || '',
     tarja:          profile?.tarja || '',
   })
-  const [saving,      setSaving]      = useState(false)
-  const [saved,       setSaved]       = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [saved,        setSaved]        = useState(false)
   const [photoLoading, setPhotoLoading] = useState(false)
   const fileRef = useRef(null)
+
+  // ── Notificações push ──────────────────────────────────────────────────────
+  const [pushState,    setPushState]    = useState('default') // 'unsupported'|'denied'|'default'|'subscribed'
+  const [pushLoading,  setPushLoading]  = useState(false)
+
+  useEffect(() => {
+    getPushState().then(setPushState)
+  }, [])
+
+  async function handleTogglePush() {
+    setPushLoading(true)
+    try {
+      if (pushState === 'subscribed') {
+        await unsubscribeFromPush(profile.id)
+        setPushState('default')
+      } else {
+        await subscribeToPush(profile.id)
+        setPushState('subscribed')
+      }
+    } catch (err) {
+      if (err.message?.includes('negada') || Notification.permission === 'denied') {
+        setPushState('denied')
+        alert('Permissão bloqueada. Habilite notificações nas configurações do seu navegador.')
+      } else {
+        alert('Erro ao configurar notificações: ' + err.message)
+      }
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -200,9 +231,10 @@ export default function Profile() {
       {/* Settings */}
       <Card>
         <CardSection title="Configurações">
+          {/* Modo escuro */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="flex items-center justify-between w-full py-2"
+            className="flex items-center justify-between w-full py-2 border-b border-[var(--color-border)]"
           >
             <div className="flex items-center gap-2 text-sm text-[var(--color-text-2)]">
               {darkMode ? <Sun size={15} /> : <Moon size={15} />}
@@ -212,6 +244,34 @@ export default function Profile() {
               <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${darkMode ? 'translate-x-4' : ''}`} />
             </div>
           </button>
+
+          {/* Notificações push */}
+          {pushState !== 'unsupported' && (
+            <button
+              onClick={handleTogglePush}
+              disabled={pushLoading || pushState === 'denied'}
+              className="flex items-center justify-between w-full py-2 disabled:opacity-50"
+            >
+              <div className="flex items-center gap-2 text-sm text-[var(--color-text-2)]">
+                {pushState === 'subscribed'
+                  ? <Bell size={15} className="text-primary-500" />
+                  : <BellOff size={15} />}
+                <div className="text-left">
+                  <p>{pushState === 'subscribed' ? 'Notificações ativas' : 'Notificações desativadas'}</p>
+                  {pushState === 'denied' && (
+                    <p className="text-2xs text-danger-500 mt-0.5">Bloqueado — habilite nas configurações do navegador</p>
+                  )}
+                </div>
+              </div>
+              {pushLoading ? (
+                <Loader2 size={15} className="animate-spin text-[var(--color-text-3)]" />
+              ) : pushState !== 'denied' ? (
+                <div className={`w-9 h-5 rounded-full transition-colors ${pushState === 'subscribed' ? 'bg-primary-600' : 'bg-[var(--color-bg-3)]'} relative`}>
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pushState === 'subscribed' ? 'translate-x-4' : ''}`} />
+                </div>
+              ) : null}
+            </button>
+          )}
         </CardSection>
       </Card>
 

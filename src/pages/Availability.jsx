@@ -103,6 +103,9 @@ export default function Availability() {
   const [saved,        setSaved]        = useState(false)
   const [inWindow,     setInWindow]     = useState(false)
   const [selectedDay,  setSelectedDay]  = useState(null)
+  // Banner de avanço: registra se o dia estava completo ao ser aberto
+  const [dayOpenedComplete, setDayOpenedComplete] = useState(false)
+  const [bannerDismissed,   setBannerDismissed]   = useState(false)
 
   const [viewYear,  setViewYear]  = useState(new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(new Date().getMonth())
@@ -185,10 +188,10 @@ export default function Availability() {
         .eq('ciclo_id', c.id).eq('user_id', profile.id)
       if (isCancelled()) return
 
-      // Initialize all slots as null
+      // Initialize all slots as null (activeSubdepsForDay handles observer ensaio keys)
       const map = {}
       for (const sun of suns) {
-        for (const sub of mySubdeps) {
+        for (const sub of activeSubdepsForDay(sun)) {
           map[`${sun}:${sub}`] = null
         }
       }
@@ -201,6 +204,16 @@ export default function Availability() {
     }
   }
 
+  // Reseta estado do banner quando o usuário abre um novo dia
+  useEffect(() => {
+    if (!selectedDay) { setDayOpenedComplete(false); setBannerDismissed(false); return }
+    const active = activeSubdepsForDay(selectedDay)
+    const complete = active.length > 0 && active.every(s => disponibilis[`${selectedDay}:${s}`] !== null)
+    setDayOpenedComplete(complete)
+    setBannerDismissed(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDay])
+
   const toggleDisp = (domingo, subdep, value) => {
     if (!inWindow) return
     const key = `${domingo}:${subdep}`
@@ -208,6 +221,19 @@ export default function Availability() {
       ...prev,
       [key]: prev[key] === value ? null : value,
     }))
+  }
+
+  const fillAllAvailable = () => {
+    setDisponibilis(prev => {
+      const next = { ...prev }
+      for (const sun of domingos) {
+        for (const sub of activeSubdepsForDay(sun)) {
+          const key = `${sun}:${sub}`
+          if (next[key] === null) next[key] = true
+        }
+      }
+      return next
+    })
   }
 
   const handleSave = async () => {
@@ -247,13 +273,36 @@ export default function Availability() {
   function dayCalendarState(dateStr) {
     if (!domingos.includes(dateStr)) return 'none'
     const active = activeSubdepsForDay(dateStr)
-    if (active.length === 0) return 'ensaio'
+    if (active.length === 0) return 'unset'
     const vals = active.map(s => disponibilis[`${dateStr}:${s}`])
     if (vals.every(v => v === true))  return 'available'
     if (vals.every(v => v === false)) return 'unavailable'
     if (vals.some(v => v !== null))   return 'partial'
     return 'unset'
   }
+
+  // ── Navegação entre domingos ────────────────────────────────────────────────
+  const selectedDayIdx = selectedDay ? domingos.indexOf(selectedDay) : -1
+  const prevDay        = selectedDayIdx > 0 ? domingos[selectedDayIdx - 1] : null
+  const nextDay        = selectedDayIdx < domingos.length - 1 ? domingos[selectedDayIdx + 1] : null
+
+  // Próximo domingo ainda com pelo menos uma resposta null
+  const nextPendingDay = selectedDay ? domingos.find((d, i) => {
+    if (i <= selectedDayIdx) return false
+    return activeSubdepsForDay(d).some(s => disponibilis[`${d}:${s}`] === null)
+  }) ?? null : null
+
+  // Banner de avanço: dia foi completado durante esta visita
+  const selectedDayComplete = selectedDay ? (() => {
+    const active = activeSubdepsForDay(selectedDay)
+    return active.length > 0 && active.every(s => disponibilis[`${selectedDay}:${s}`] !== null)
+  })() : false
+  const showAdvanceBanner = selectedDayComplete && !dayOpenedComplete && !bannerDismissed && inWindow
+
+  // Atalho "disponível em todos": há algum slot null?
+  const hasAnyPending = inWindow && domingos.some(d =>
+    activeSubdepsForDay(d).some(s => disponibilis[`${d}:${s}`] === null)
+  )
 
   const grid   = buildGrid(viewYear, viewMonth)
   const today  = new Date().toISOString().split('T')[0]
@@ -403,19 +452,45 @@ export default function Availability() {
       {/* ── Selected day panel ─────────────────────────────────────────────────── */}
       {selectedDay && (
         <Card className="!p-4 border-l-4 border-primary-500">
-          {/* Day header */}
-          <div className="flex items-start justify-between mb-4">
-            <p className="text-sm font-semibold text-[var(--color-text-1)]">{formatDomingo(selectedDay)}</p>
+          {/* Day header com navegação */}
+          <div className="flex items-center justify-between mb-4">
             <button
-              onClick={() => setSelectedDay(null)}
-              className="text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors p-1 rounded text-xs"
-            >✕</button>
+              onClick={() => prevDay && setSelectedDay(prevDay)}
+              disabled={!prevDay}
+              className={cn('p-1.5 rounded-lg transition-colors flex-shrink-0',
+                prevDay ? 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)]'
+                        : 'text-[var(--color-text-3)] opacity-30 cursor-not-allowed')}
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <div className="text-center min-w-0 px-1">
+              <p className="text-sm font-semibold text-[var(--color-text-1)] truncate">{formatDomingo(selectedDay)}</p>
+              <p className="text-2xs text-[var(--color-text-3)]">Dom {selectedDayIdx + 1} de {domingos.length}</p>
+            </div>
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={() => nextDay && setSelectedDay(nextDay)}
+                disabled={!nextDay}
+                className={cn('p-1.5 rounded-lg transition-colors',
+                  nextDay ? 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)]'
+                          : 'text-[var(--color-text-3)] opacity-30 cursor-not-allowed')}
+              >
+                <ChevronRight size={17} />
+              </button>
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="p-1.5 text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors rounded-lg text-xs leading-none"
+              >✕</button>
+            </div>
           </div>
 
-          {mySubdeps.length === 0 ? (
-            <p className="text-xs text-[var(--color-text-3)]">Nenhum subdepartamento vinculado ao seu perfil.</p>
-          ) : (() => {
+          {(() => {
             const activeSubdeps = activeSubdepsForDay(selectedDay)
+            if (activeSubdeps.length === 0) return (
+              <p className="text-xs text-[var(--color-text-3)]">
+                {isObservador ? 'Neste domingo não há ensaio.' : 'Nenhum subdepartamento vinculado ao seu perfil.'}
+              </p>
+            )
             return (
             <div className="space-y-4">
               {activeSubdeps.map(subdep => {
@@ -526,7 +601,48 @@ export default function Availability() {
             </div>
             )
           })()}
+
+          {/* Banner de avanço — aparece ao completar o dia */}
+          {showAdvanceBanner && (
+            <div className="mt-4 rounded-xl border border-success-500/30 bg-success-500/10 p-3.5">
+              <p className="text-xs font-semibold text-success-500 mb-1.5 flex items-center gap-1.5">
+                <CheckCircle2 size={13} />
+                {nextPendingDay ? 'Domingo preenchido!' : 'Tudo preenchido!'}
+              </p>
+              <p className="text-xs text-[var(--color-text-2)] mb-3">
+                {nextPendingDay
+                  ? 'Podemos avançar para o próximo domingo de serviço?'
+                  : 'Todos os domingos foram respondidos. Não esqueça de salvar.'}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBannerDismissed(true)}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium border border-[var(--color-border)] text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors"
+                >
+                  {nextPendingDay ? 'Agora não' : 'OK'}
+                </button>
+                {nextPendingDay && (
+                  <button
+                    onClick={() => setSelectedDay(nextPendingDay)}
+                    className="flex-1 py-2 rounded-lg text-xs font-semibold bg-success-500 text-white hover:bg-success-600 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    Sim, próximo <ChevronRight size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
+      )}
+
+      {/* Atalho: marcar disponível em todos os domingos pendentes */}
+      {hasAnyPending && (
+        <button
+          onClick={fillAllAvailable}
+          className="w-full py-3 rounded-xl text-sm font-medium text-primary-500 border border-primary-500/30 hover:bg-primary-500/10 active:bg-primary-500/20 transition-colors"
+        >
+          Marcar disponível em todos os domingos
+        </button>
       )}
 
       {/* Save button */}

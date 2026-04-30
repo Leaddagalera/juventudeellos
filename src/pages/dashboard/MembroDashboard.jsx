@@ -7,6 +7,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { useSysConfig } from '../../lib/sysConfig.js'
+import { isEnsaioSunday } from '../../lib/scheduleEngine.js'
 import { Card, CardSection, EmptyState, Skeleton, Avatar } from '../../components/ui/Card.jsx'
 import { Badge } from '../../components/ui/Badge.jsx'
 import { Button } from '../../components/ui/Button.jsx'
@@ -68,12 +70,13 @@ function StatusItem({ icon: Icon, label, sub, iconClass, to }) {
 
 export default function MembroDashboard() {
   const { profile } = useAuth()
+  const { config: sysConfig } = useSysConfig()
 
   const [ciclo,            setCiclo]            = useState(null)
   const [escalas,          setEscalas]          = useState([])
   const [briefing,         setBriefing]         = useState(null)
   const [comunicados,      setComunicados]      = useState([])
-  const [temDisponib,      setTemDisponib]      = useState(false)
+  const [dispRecords,      setDispRecords]      = useState([])
   const [trocasPend,       setTrocasPend]       = useState([])
   const [loading,          setLoading]          = useState(true)
 
@@ -122,14 +125,13 @@ export default function MembroDashboard() {
       const escalasAtivas = (myEscalas || []).filter(e => e.ciclo_id === cicloAtivo.id)
       setEscalas(escalasAtivas)
 
-      // Disponibilidade do usuário no ciclo
+      // Disponibilidade do usuário no ciclo (todos os registros para calcular progresso)
       const { data: dispData } = await supabase
         .from('disponibilidades')
-        .select('id')
+        .select('domingo, subdepartamento')
         .eq('user_id', profile.id)
         .eq('ciclo_id', cicloAtivo.id)
-        .limit(1)
-      setTemDisponib((dispData?.length || 0) > 0)
+      setDispRecords(dispData || [])
 
       // Briefing do próximo culto escalado
       const today = new Date().toISOString().split('T')[0]
@@ -213,6 +215,50 @@ export default function MembroDashboard() {
   const faseAposDisponib = ['gerando_escala', 'escala_publicada', 'confirmacoes'].includes(ciclo?.status)
   const escalaPublicada  = ['escala_publicada', 'confirmacoes'].includes(ciclo?.status)
 
+  // ── Progresso de disponibilidade ────────────────────────────────────────────
+  const isObservador = profile?.role === 'membro_observador'
+  const mySubdeps = (() => {
+    const s = profile?.subdepartamento
+    if (!s) return []
+    return Array.isArray(s) ? s.filter(Boolean) : [s].filter(Boolean)
+  })()
+
+  // Slots válidos do ciclo: constrói Set de "domingo:subdep" e faz cross-reference com DB
+  const { availTotalSlots, availFilledSlots } = (() => {
+    if (!ciclo) return { availTotalSlots: 0, availFilledSlots: 0 }
+    const ensaioWeek = sysConfig?.ensaio_week ?? 4
+    const d = new Date(ciclo.inicio + 'T00:00:00')
+    while (d.getDay() !== 0) d.setDate(d.getDate() + 1)
+    const end = new Date(ciclo.fim + 'T00:00:00')
+    const validKeys = new Set()
+    while (d <= end) {
+      const y  = d.getFullYear()
+      const mo = String(d.getMonth() + 1).padStart(2, '0')
+      const dy = String(d.getDate()).padStart(2, '0')
+      const dateStr = `${y}-${mo}-${dy}`
+      const activeSubs = isEnsaioSunday(dateStr, ensaioWeek)
+        ? (isObservador ? ['ensaio'] : mySubdeps.length > 0 ? [...mySubdeps, 'ensaio'] : [])
+        : (isObservador ? [] : [...mySubdeps])
+      for (const sub of activeSubs) validKeys.add(`${dateStr}:${sub}`)
+      d.setDate(d.getDate() + 7)
+    }
+    const filled = dispRecords.filter(r => validKeys.has(`${r.domingo}:${r.subdepartamento}`)).length
+    return { availTotalSlots: validKeys.size, availFilledSlots: filled }
+  })()
+
+  const availPct = availTotalSlots > 0 ? Math.round((availFilledSlots / availTotalSlots) * 100) : 100
+
+  // Prazo da janela: normaliza created_at para início do dia local, depois soma avail_window_end
+  const windowDeadline = (ciclo && faseDisponib) ? (() => {
+    const d = new Date(ciclo.created_at)
+    d.setHours(0, 0, 0, 0)   // evita inflação por horário UTC vs. local
+    d.setDate(d.getDate() + (sysConfig?.avail_window_end ?? 20))
+    return d
+  })() : null
+  const daysUntilDeadline = windowDeadline
+    ? Math.ceil((windowDeadline.getTime() - Date.now()) / 86_400_000)
+    : null
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -258,6 +304,69 @@ export default function MembroDashboard() {
           </div>
         </Card>
       ) : null}
+
+      {/* ── CTA de disponibilidade ── */}
+      {!loading && ciclo && faseDisponib && availTotalSlots > 0 && (
+        availPct === 100 ? (
+          <Card className="!p-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 size={18} className="text-success-500 flex-shrink-0" />
+              <p className="text-sm font-semibold text-success-500">Disponibilidade enviada</p>
+            </div>
+          </Card>
+        ) : (
+          <Link to="/availability">
+            <Card className="!p-4 hover:bg-[var(--color-bg-2)] transition-colors cursor-pointer">
+              {/* Cabeçalho */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${availPct > 0 ? 'bg-warning-500/15' : 'bg-primary-500/15'}`}>
+                    <CheckSquare size={15} className={availPct > 0 ? 'text-warning-500' : 'text-primary-500'} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--color-text-1)] leading-tight">
+                      {availPct === 0 ? 'Preencha sua disponibilidade' : 'Disponibilidade incompleta'}
+                    </p>
+                    {daysUntilDeadline !== null && (
+                      <p className={`text-xs mt-0.5 flex items-center gap-1 ${daysUntilDeadline <= 2 ? 'text-danger-500' : 'text-[var(--color-text-3)]'}`}>
+                        <Clock size={10} />
+                        {daysUntilDeadline > 0
+                          ? `Prazo: ${daysUntilDeadline} dia${daysUntilDeadline > 1 ? 's' : ''}`
+                          : 'Encerra hoje!'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {availPct > 0 && (
+                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-warning-500/20 text-warning-500 flex-shrink-0 mt-0.5">
+                    Incompleto
+                  </span>
+                )}
+              </div>
+
+              {/* Barra de progresso (só quando parcialmente preenchido) */}
+              {availPct > 0 && (
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex-1 cycle-bar">
+                    <div className="cycle-bar-fill !bg-warning-500" style={{ width: `${availPct}%` }} />
+                  </div>
+                  <span className="text-xs font-semibold text-warning-500 w-8 text-right">{availPct}%</span>
+                </div>
+              )}
+
+              {/* Rodapé */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--color-text-3)]">
+                  {availFilledSlots} de {availTotalSlots} domingos
+                </span>
+                <span className="text-xs font-semibold text-primary-500 flex items-center gap-1">
+                  Preencher agora <ChevronRight size={12} />
+                </span>
+              </div>
+            </Card>
+          </Link>
+        )
+      )}
 
       {/* ── Comunicados ── */}
       {comunicados.length > 0 && (
@@ -325,12 +434,14 @@ export default function MembroDashboard() {
                   />
                 )}
                 {faseDisponib && (
-                  temDisponib
-                    ? <StatusItem icon={CheckCircle2} iconClass="text-success-500" label="Disponibilidade preenchida" />
-                    : <StatusItem icon={AlertCircle}  iconClass="text-warning-500" label="Disponibilidade não preenchida" sub="Toque para preencher agora" to="/availability" />
+                  availPct === 100
+                    ? <StatusItem icon={CheckCircle2} iconClass="text-success-500" label="Disponibilidade enviada" />
+                    : <StatusItem icon={AlertCircle}  iconClass="text-warning-500"
+                        label={availPct > 0 ? 'Disponibilidade incompleta' : 'Disponibilidade não preenchida'}
+                        sub="Toque para preencher agora" to="/availability" />
                 )}
                 {faseAposDisponib && (
-                  temDisponib
+                  availPct > 0
                     ? <StatusItem icon={CheckCircle2} iconClass="text-success-500" label="Disponibilidade preenchida" />
                     : <StatusItem icon={AlertCircle}  iconClass="text-[var(--color-text-3)]" label="Disponibilidade não preenchida" />
                 )}

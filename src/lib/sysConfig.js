@@ -46,7 +46,7 @@ export const SYS_DEFAULTS = {
   slots: {
     louvor:   4,
     regencia: 1,
-    ebd:      2,
+    ebd:      1,
     recepcao: 2,
     midia:    1,
   },
